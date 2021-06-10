@@ -1,12 +1,11 @@
 #include <assert.h>
 
-#include <wait.h>
 #include <sys/ptrace.h>
+#include <wait.h>
 
 #include "procfs_parser_api.h"
 
-struct kernel_version
-{
+struct kernel_version {
     int major;
     int minor;
     int patch;
@@ -27,32 +26,27 @@ static bool read_kernel_version(struct kernel_version &kversion)
     };
 
     vfile = fopen("/proc/version", "r");
-    if (!vfile)
-    {
+    if (!vfile) {
         goto done;
     }
 
-    if (fread(buffer, 1, sizeof(buffer), vfile) < sizeof(buffer))
-    {
+    if (fread(buffer, 1, sizeof(buffer), vfile) < sizeof(buffer)) {
         goto done;
     }
     buffer[sizeof(buffer) - 1] = '\0';
 
-    if (strncmp(buffer, VERSION_PREFIX, VERSION_PREFIX_LEN) != 0)
-    {
+    if (strncmp(buffer, VERSION_PREFIX, VERSION_PREFIX_LEN) != 0) {
         goto done;
     }
 
     cursor = buffer + VERSION_PREFIX_LEN;
-    for (int i = 0; i < 3; i++)
-    {
+    for (int i = 0; i < 3; i++) {
         long version;
         cursor++; // skip ' ' or '.'
 
         errno = 0;
         version = strtol(cursor, &cursor, 10);
-        if (errno != 0)
-        {
+        if (errno != 0) {
             goto done;
         }
 
@@ -64,22 +58,21 @@ static bool read_kernel_version(struct kernel_version &kversion)
 
 done:
 
-    if (vfile != NULL)
-    {
+    if (vfile != NULL) {
         fclose(vfile);
     }
 
     return result;
 }
 
-static int compare_kernel_version(struct kernel_version &kversion, const int major, const int minor, const int patch)
-{
 #define COMPARE_VERSION(v1, v2) \
-    if (v1 != v2)           \
-    {                           \
+    if (v1 != v2) {             \
         return v1 - v2;         \
     }
 
+static int compare_kernel_version(struct kernel_version &kversion,
+                                  const int major, const int minor, const int patch)
+{
     COMPARE_VERSION(kversion.major, major);
     COMPARE_VERSION(kversion.minor, minor);
     COMPARE_VERSION(kversion.patch, patch);
@@ -91,17 +84,13 @@ bool is_process_alive(const int pid, bool &is_alive)
 {
     char path[32];
 
-    if (sprintf(path, "/proc/%d", pid) < 0)
-    {
+    if (sprintf(path, "/proc/%d", pid) < 0) {
         return false;
     }
 
-    if (access(path, F_OK) == 0)
-    {
+    if (access(path, F_OK) == 0) {
         is_alive = true;
-    }
-    else
-    {
+    } else {
         is_alive = false;
     }
 
@@ -111,9 +100,9 @@ bool is_process_alive(const int pid, bool &is_alive)
 bool is_user_process(const int pid, bool &is_up)
 {
     bool result = false;
+
     result = is_kernel_process(pid, is_up);
-    if (result == true)
-    {
+    if (result == true) {
         is_up = !is_up;
     }
 
@@ -127,8 +116,7 @@ bool is_kernel_process(const int pid, bool &is_kp)
 
     /* succeed to read at least 1 byte from cmdline file => user process */
     result = read_command_line(pid, buffer, sizeof(buffer));
-    if (result == true)
-    {
+    if (result == true) {
         is_kp = false;
     }
 
@@ -144,27 +132,23 @@ bool read_command_line(const int pid, char *buffer, unsigned int bsz)
     char *buff = NULL;
     int rsz = 0;
 
-    if (sprintf(path, "/proc/%d/cmdline", pid) < 0)
-    {
+    if (sprintf(path, "/proc/%d/cmdline", pid) < 0) {
         return false;
     }
 
     buff = (char *)malloc(bsz);
-    if (buff == NULL)
-    {
+    if (buff == NULL) {
         goto done;
     }
     memset(buff, 0, bsz);
 
     file = fopen(path, "r");
-    if (file == NULL)
-    {
+    if (file == NULL) {
         goto done;
     }
 
     rsz = fread(buff, 1, bsz, file);
-    if (rsz == 0)
-    {
+    if (rsz == 0) {
         goto done;
     }
 
@@ -173,57 +157,46 @@ bool read_command_line(const int pid, char *buffer, unsigned int bsz)
 
 done:
 
-    if (file != NULL)
-    {
+    if (file) {
         fclose(file);
     }
 
-    if (buff != NULL)
-    {
+    if (buff) {
         free(buff);
     }
 
     return result;
 }
 
-bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
-{
+bool read_imagepath(const int pid, char *buffer, unsigned int bsz) {
     bool result = false;
 
     char exe_path[32];
     char buff[PATH_MAX] = "";
     int length;
 
-    if (sprintf(exe_path, "/proc/%d/exe", pid) < 0)
-    {
+    if (sprintf(exe_path, "/proc/%d/exe", pid) < 0) {
         return false;
     }
 
     length = readlink(exe_path, buff, sizeof(buff));
-    if (length <= 0 || length + 1 < bsz) // fail or not enough buffer size
-    {
+    if (length <= 0 || length + 1 < bsz) { // fail or not enough buffer size
         result = false;
         goto done;
-    }
-    else
-    {
+    } else {
         char tmp_buff[PATH_MAX] = "";
 
         /* double check to determine if it's fileless process by realpath api */
         errno = 0;
         realpath(exe_path, tmp_buff); // return value consumed
-        if (errno != 0 || errno != ENOENT)
-        {
+        if (errno != 0 || errno != ENOENT) {
             result = false;
             goto done;
-        }
-        else if (errno == ENOENT)
-        {
+        } else if (errno == ENOENT) {
             bool fileless = false;
             static const int READLINK_DELETED_STR_LEN = sizeof(" (deleted)") - 1;
 
-            if (length > READLINK_DELETED_STR_LEN)
-            {
+            if (length > READLINK_DELETED_STR_LEN) {
                 char *cursor = buff + length - READLINK_DELETED_STR_LEN;
                 if (strcmp(cursor, " (deleted)") == 0) // fileless process
                 {
@@ -232,8 +205,7 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
                 }
             }
 
-            if (fileless == false)
-            {
+            if (fileless == false) {
                 result = false;
                 goto done;
             }
@@ -248,25 +220,22 @@ done:
     return result;
 }
 
-bool attach_process_by_pid(const int pid, bool &is_attached)
-{
-    if(ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1 )
-    {
-        return false;
+bool attach_process_by_pid(const int pid, bool &is_attached) {
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
+        is_attached = false;
+        return true;
     }
 
-    if(waitpid(pid, NULL, 0) == -1)
-    {
-        return true; // treat as success
-    }
+    waitpid(pid, NULL, 0);
+    /* result consumed */
+
+    is_attached = true;
 
     return true;
 }
 
-bool detach_process_by_pid(const int pid)
-{
-    if(ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
-    {
+bool detach_process_by_pid(const int pid) {
+    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1) {
         return false;
     }
 

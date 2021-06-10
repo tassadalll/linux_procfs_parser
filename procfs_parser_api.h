@@ -22,3 +22,5 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz);
 
 bool attach_process_by_pid(const int pid, bool &is_attached);
 bool detach_process_by_pid(const int pid);
+
+bool read_memory(const int pid, const long long start_address, const int size);
