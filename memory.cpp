@@ -27,13 +27,13 @@ static bool read_memory_ex(const int pid, FILE *memfile, unsigned char *&memory,
         goto done;
     }
 
-    detach_process_by_pid(pid);
-
-    if( result == true) {
-        memcpy(memory, buffer, rsize);
-    }
+    memcpy(memory, buffer, rsize);
 
 done:
+
+    if(is_attached) {
+        detach_process_by_pid(pid);
+    }
 
     if(buffer) {
         free(buffer);
