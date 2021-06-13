@@ -168,7 +168,8 @@ done:
     return result;
 }
 
-bool read_imagepath(const int pid, char *buffer, unsigned int bsz) {
+bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
+{
     bool result = false;
 
     char exe_path[32];
@@ -220,24 +221,22 @@ done:
     return result;
 }
 
-bool attach_process_by_pid(const int pid, bool &is_attached) {
+void attach_process_by_pid(const int pid, bool &is_attached)
+{
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
         is_attached = false;
-        return true;
+        return;
     }
-
-    waitpid(pid, NULL, 0);
-    /* result consumed */
 
     is_attached = true;
 
-    return true;
+    waitpid(pid, NULL, 0);
+    /* result consumed */
 }
 
-bool detach_process_by_pid(const int pid) {
-    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1) {
-        return false;
+void detach_process_by_pid(const int pid)
+{
+    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) != -1) {
+        // failed to detach, but can do nothing
     }
-
-    return true;
 }

@@ -1,5 +1,27 @@
 #include "procfs_parser_api.h"
 
+void test1(const int pid)
+{
+    unsigned char* memory = NULL;
+
+    memory = (unsigned char *)malloc(0x5000);
+    if(!memory)
+    {
+        goto done;
+    }
+    memset(memory, 0x00, 0x5000);
+
+
+    read_memory(pid, 0x558018303000, 0x558018308000, memory);
+
+done:
+
+    if(memory)
+    {
+        free(memory);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     bool result = false;
@@ -22,6 +44,7 @@ int main(int argc, char *argv[])
     if (result == false || is_alive == false) {
         goto done;
     }
+    test1(pid);
 
     is_kernel_process(pid, is_kp);
     read_command_line(pid, buffer, 4096);

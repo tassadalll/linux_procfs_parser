@@ -20,7 +20,7 @@ bool is_user_process(const int pid, bool &is_up);
 bool read_command_line(const int pid, char *buffer, unsigned int bsz);
 bool read_imagepath(const int pid, char *buffer, unsigned int bsz);
 
-bool attach_process_by_pid(const int pid, bool &is_attached);
-bool detach_process_by_pid(const int pid);
+void attach_process_by_pid(const int pid, bool &is_attached);
+void detach_process_by_pid(const int pid);
 
-bool read_memory(const int pid, const long long start_address, const int size);
+bool read_memory(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char *&memory);
