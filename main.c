@@ -40,13 +40,13 @@ int main(int argc, char *argv[])
 
     pid = atoi(argv[1]);
 
-    result = is_process_alive(pid, is_alive);
+    result = is_process_alive(pid, &is_alive);
     if (result == false || is_alive == false) {
         goto done;
     }
     test1(pid);
 
-    is_kernel_process(pid, is_kp);
+    is_kernel_process(pid, &is_kp);
     read_command_line(pid, buffer, 4096);
     read_imagepath(pid, buffer, 2);
 

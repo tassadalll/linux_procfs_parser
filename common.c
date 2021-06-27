@@ -12,9 +12,9 @@ struct kernel_version {
 };
 
 #define VERSION_PREFIX "Linux version"
-#define VERSION_PREFIX_LEN (sizeof("Linux version") - 1)
+#define VERSION_PREFIX_LEN ( sizeof( "Linux version" ) - 1 )
 
-static bool read_kernel_version(struct kernel_version &kversion)
+static bool read_kernel_version(struct kernel_version *kversion)
 {
     bool result = false;
 
@@ -53,7 +53,7 @@ static bool read_kernel_version(struct kernel_version &kversion)
         *((int *)&kv + i) = (int)version;
     }
 
-    kversion = kv;
+    *kversion = kv;
     result = true;
 
 done:
@@ -70,17 +70,17 @@ done:
         return v1 - v2;         \
     }
 
-static int compare_kernel_version(struct kernel_version &kversion,
+static int compare_kernel_version(struct kernel_version *kversion,
                                   const int major, const int minor, const int patch)
 {
-    COMPARE_VERSION(kversion.major, major);
-    COMPARE_VERSION(kversion.minor, minor);
-    COMPARE_VERSION(kversion.patch, patch);
+    COMPARE_VERSION(kversion->major, major);
+    COMPARE_VERSION(kversion->minor, minor);
+    COMPARE_VERSION(kversion->patch, patch);
 
     return 0; // same kernel version
 }
 
-bool is_process_alive(const int pid, bool &is_alive)
+bool is_process_alive(const int pid, bool *is_alive)
 {
     char path[32];
 
@@ -89,27 +89,27 @@ bool is_process_alive(const int pid, bool &is_alive)
     }
 
     if (access(path, F_OK) == 0) {
-        is_alive = true;
+        *is_alive = true;
     } else {
-        is_alive = false;
+        *is_alive = false;
     }
 
     return true;
 }
 
-bool is_user_process(const int pid, bool &is_up)
+bool is_user_process(const int pid, bool *is_up)
 {
     bool result = false;
 
     result = is_kernel_process(pid, is_up);
     if (result == true) {
-        is_up = !is_up;
+        *is_up = !*is_up;
     }
 
     return result;
 }
 
-bool is_kernel_process(const int pid, bool &is_kp)
+bool is_kernel_process(const int pid, bool *is_kp)
 {
     bool result = false;
     char buffer[2];
@@ -117,7 +117,7 @@ bool is_kernel_process(const int pid, bool &is_kp)
     /* succeed to read at least 1 byte from cmdline file => user process */
     result = read_command_line(pid, buffer, sizeof(buffer));
     if (result == true) {
-        is_kp = false;
+        *is_kp = false;
     }
 
     return result;
@@ -180,35 +180,24 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
         return false;
     }
 
+    errno = 0;
     length = readlink(exe_path, buff, sizeof(buff));
-    if (length <= 0 || length + 1 < bsz) { // fail or not enough buffer size
-        result = false;
-        goto done;
+    if( errno != 0 && errno != ENOENT ) {
+        return false;
+    }
+
+    /* failed or not enough buffer size */
+    if( length <= 0 || length + 1 > bsz) {
+        return false;
     } else {
-        char tmp_buff[PATH_MAX] = "";
+        static const int READLINK_DELETED_STR_LEN = sizeof(" (deleted)") - 1;
 
-        /* double check to determine if it's fileless process by realpath api */
-        errno = 0;
-        realpath(exe_path, tmp_buff); // return value consumed
-        if (errno != 0 || errno != ENOENT) {
-            result = false;
-            goto done;
-        } else if (errno == ENOENT) {
-            bool fileless = false;
-            static const int READLINK_DELETED_STR_LEN = sizeof(" (deleted)") - 1;
+        if (length > READLINK_DELETED_STR_LEN) {
+            char *cursor = buff + length - READLINK_DELETED_STR_LEN;
 
-            if (length > READLINK_DELETED_STR_LEN) {
-                char *cursor = buff + length - READLINK_DELETED_STR_LEN;
-                if (strcmp(cursor, " (deleted)") == 0) // fileless process
-                {
-                    fileless = true;
-                    *cursor = '\0';
-                }
-            }
-
-            if (fileless == false) {
-                result = false;
-                goto done;
+            /* check if it is fileless process or UPX process */
+            if (strcmp(cursor, " (deleted)") == 0) {
+                *cursor = '\0';
             }
         }
     }
@@ -221,14 +210,14 @@ done:
     return result;
 }
 
-void attach_process_by_pid(const int pid, bool &is_attached)
+void attach_process_by_pid(const int pid, bool *is_attached)
 {
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
-        is_attached = false;
+        *is_attached = false;
         return;
     }
 
-    is_attached = true;
+    *is_attached = true;
 
     waitpid(pid, NULL, 0);
     /* result consumed */

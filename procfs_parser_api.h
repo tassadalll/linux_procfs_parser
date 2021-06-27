@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include <errno.h>
@@ -13,9 +14,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-bool is_process_alive(const int pid, bool &is_alive);
-bool is_kernel_process(const int pid, bool &is_kp);
-bool is_user_process(const int pid, bool &is_up);
+bool is_process_alive(const int pid, bool *is_alive);
+bool is_kernel_process(const int pid, bool *is_kp);
+bool is_user_process(const int pid, bool *is_up);
 
 bool read_command_line(const int pid, char *buffer, unsigned int bsz);
 bool read_imagepath(const int pid, char *buffer, unsigned int bsz);
