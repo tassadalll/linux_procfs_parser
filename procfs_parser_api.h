@@ -26,15 +26,21 @@ void detach_process_by_pid(const int pid);
 
 bool read_memory(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char *memory);
 
+/* Virtual Memory Area permissions */
+#define VMA_READ     0x1
+#define VMA_WRITE    0x2
+#define VMA_EXEC     0x4
+#define VMA_MAYSHARE 0x8
+
 struct VirtualMemoryArea
 {
-    unsigned long long  vm_start;
-    unsigned long long  vm_end;
+    unsigned long long  start_address;
+    unsigned long long  end_address;
     unsigned char       permissions;
     unsigned long long  file_offset;
     unsigned char       device_major;
     unsigned char       device_minor;
     unsigned long long  inode;
-    char*               pathname;
+    char                pathname[PATH_MAX];
 };
 bool parse_maps_file(const int pid, struct VirtualMemoryArea **VMAs, int *vma_count);
