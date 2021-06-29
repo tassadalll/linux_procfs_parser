@@ -12,7 +12,7 @@ void pp_list_destroy(pp_list list);
 
 void pp_list_destroy_with_nodes(pp_list list, void (*destroy)(void *data));
 
-bool pp_list_size(pp_list list, int *size);
+int pp_list_size(struct pp_list *list);
 
 bool pp_list_get(pp_list list, int index, void **data);
 
