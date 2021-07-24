@@ -1,9 +1,13 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "procfs_parser_api.h"
 
 void test1(const int pid)
 {
     unsigned char* memory = NULL;
-
+    int read_size = 0;
     memory = (unsigned char *)malloc(0x5000);
     if(!memory)
     {
@@ -11,8 +15,7 @@ void test1(const int pid)
     }
     memset(memory, 0x00, 0x5000);
 
-
-    read_memory(pid, 0x558018303000, 0x558018308000, memory);
+    read_memory(pid, 0x558018303000, 0x558018308000, memory, 0x5000, &read_size);
 
 done:
 
@@ -45,6 +48,16 @@ int main(int argc, char *argv[])
         goto done;
     }
     test1(pid);
+    
+    {
+        struct VirtualMemoryArea* vma = NULL;
+        int count;
+        result = parse_maps_file(pid, &vma, &count );
+        if(result) {
+            
+        }
+    }
+    
 
     is_kernel_process(pid, &is_kp);
     read_command_line(pid, buffer, 4096);

@@ -1,8 +1,14 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <errno.h>
+
 #include "procfs_parser_api.h"
 
 #include "list.h"
 
-static bool read_memory_ex(const int pid, FILE *memfile, unsigned char *memory, int memsize)
+static bool read_memory_ex(const int pid, FILE *memfile, unsigned char *memory, int memsize, int* readsize)
 {
     bool result = false;
 
@@ -29,8 +35,11 @@ static bool read_memory_ex(const int pid, FILE *memfile, unsigned char *memory, 
         goto done;
     }
 
-    memcpy(memory, buffer, memsize);
-
+    memcpy(memory, buffer, rsz);
+    
+    if(readsize) {
+        *readsize = rsz;
+    }
 done:
 
     if(is_attached) {
@@ -46,16 +55,16 @@ done:
 
 bool read_memory(const int pid,
                  unsigned long long start_address, unsigned long long end_address,
-                 unsigned char *memory)
+                 unsigned char *memory, int size, int *read_size)
 {
     bool result = false;
     
     char path[32];
     bool is_attached = false;
     FILE *file = NULL;
-    int rsize = (int)(end_address - start_address);
+    int to_read_size = (int)(end_address - start_address);
 
-    if (start_address <= 0 || rsize <= 0) {
+    if (start_address <= 0 || to_read_size <= 0 || size < to_read_size) {
         return false;
     }
 
@@ -74,7 +83,7 @@ bool read_memory(const int pid,
         goto done;
     }
 
-    result = read_memory_ex(pid, file, memory, rsize);
+    result = read_memory_ex(pid, file, memory, to_read_size, read_size);
     if(!result) {
         goto done;
     }
