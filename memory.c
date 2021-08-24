@@ -5,98 +5,172 @@
 #include <errno.h>
 
 #include "procfs_parser_api.h"
+#include "pp_internal.h"
 
 #include "list.h"
 
-static bool read_memory_ex(const int pid, FILE *memfile, unsigned char *memory, int memsize, int* readsize)
+static int read_memory(const int pid, unsigned long long start_address, unsigned char **memory, int memsize)
 {
     bool result = false;
 
+    FILE *file = NULL;
+    char path[32] = "";
     bool is_attached = false;
     unsigned char *buffer = NULL;
-    int rsz = 0;
+    int read_size = 0;
+
+    if (memory == NULL || start_address < 0 || memsize <= 0) {
+        return false;
+    }
 
     buffer = (unsigned char *)malloc(memsize);
     if (!buffer) {
-        result = false;
-        goto done;
+        return false; 
+    }
+
+    if (sprintf(path, "/proc/%d/mem", pid) < 0) {
+        ERRGOTO(result, done);
+    }
+
+    file = fopen(path, "rb");
+    if (!file) {
+        ERRGOTO(result, done);
     }
 
     /* if the attach fails, `/proc/[pid]/mem` file cannot be read */
     attach_process_by_pid(pid, &is_attached);
     if (is_attached == false) {
-        result = false;
-        goto done;
+        ERRGOTO(result, done);
     }
 
-    rsz = fread(buffer, 1, memsize, memfile);
-    if (rsz < memsize) {
-        result = false;
-        goto done;
+    if (fseek(file, (long)start_address, SEEK_SET) != 0) {
+        ERRGOTO(result, done);
     }
 
-    memcpy(memory, buffer, rsz);
-    
-    if(readsize) {
-        *readsize = rsz;
+    read_size = fread(buffer, 1, memsize, file);
+    if (read_size < memsize) {
+        ERRGOTO(result, done);
     }
+
+    *memory = buffer;
+    buffer = NULL;
+
 done:
 
     if(is_attached) {
         detach_process_by_pid(pid);
     }
 
+    if(file) {
+        fclose(file);
+    }
+
     if(buffer) {
         free(buffer);
     }
 
-    return result;
+    return read_size;
 }
 
-bool read_memory(const int pid,
-                 unsigned long long start_address, unsigned long long end_address,
-                 unsigned char *memory, int size, int *read_size)
+int read_memory_by_size(const int pid, unsigned long long start_address, int to_rsz, unsigned char **memory)
+{
+    return read_memory(pid, start_address, memory, to_rsz);
+}
+
+int read_memory_by_address(const int pid,
+                 unsigned long long start_address, unsigned long long end_address, unsigned char **memory)
+{
+    int memsize = (int)(end_address - start_address);
+
+    return read_memory(pid, start_address, memory, memsize);
+}
+
+static bool search_inode_by_image_path(struct VirtualMemoryArea *vma, int vma_count, const char* image_path, unsigned long long *inode)
+{
+    bool found = false;
+    int i;
+
+    for (i = 0; i < vma_count; i++) {
+        if (strcmp(vma[i].pathname, image_path) == 0) {
+            *inode = vma[i].inode;
+            found = true;
+            break;
+        }
+    }
+
+    return found;
+}
+
+bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size)
 {
     bool result = false;
-    
-    char path[32];
-    bool is_attached = false;
-    FILE *file = NULL;
-    int to_read_size = (int)(end_address - start_address);
 
-    if (start_address <= 0 || to_read_size <= 0 || size < to_read_size) {
-        return false;
-    }
+    struct VirtualMemoryArea* vma = NULL;
+    int vma_count = 0;
+    char *memory = NULL;
+    int size = 0;
+    int i;
 
-    if (sprintf(path, "/proc/%d/mem", pid) < 0) {
-        return false;
-    }
-
-    file = fopen(path, "rb");
-    if (!file) {
-        result = false;
-        goto done;
-    }
-
-    if (fseek(file, (long)start_address, SEEK_SET) != 0) {
-        result = false;
-        goto done;
-    }
-
-    result = read_memory_ex(pid, file, memory, to_read_size, read_size);
+    result = parse_maps_file(pid, &vma, &vma_count);
     if(!result) {
         goto done;
     }
 
-done:
-
-    if (file) {
-        fclose(file);
+    for (i = 0; i < vma_count; i++) {
+        if (strcmp(vma[i].pathname, "[stack]") == 0) {
+            break;
+        }
     }
+
+    if(i == vma_count) {
+        ERRGOTO(result, done); // failed to find stack area
+    }
+
+    *stack_size = read_memory_by_address(pid, vma[i].start_address, vma[i].end_address, stack);
+    if(*stack_size <= 0) {
+        ERRGOTO(result, done);
+    }
+
+done:
 
     return result;
 }
 
+bool dump_process_image(const int pid, const char *image_path, const char *dump_path)
+{
+    bool result = false;
+    struct VirtualMemoryArea* vma = NULL;
+    int vma_count = 0;
+    unsigned long long image_inode = 0;
+    int i;
+
+    result = parse_maps_file(pid, &vma, &vma_count);
+    if(!result) {
+        goto done;
+    }
+
+    result = search_inode_by_image_path(vma, vma_count, image_path, &image_inode);
+    if(!result) {
+        goto done;
+    }
+
+    if(image_inode == 0) {
+        fprintf(stderr, "Cannot find process image area");
+        ERRGOTO(result, done)
+    }
+
+    
+
+    
+
+done:
+
+    if(vma) {
+        free(vma);
+    }
+
+    return result;
+}
 
 #define MAPS_LINE_CHK(ptr, expected_ch, label) \
     if (errno != 0 || *ptr != expected_ch) {   \

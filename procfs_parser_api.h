@@ -14,8 +14,10 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz);
 void attach_process_by_pid(const int pid, bool *is_attached);
 void detach_process_by_pid(const int pid);
 
-bool read_memory(const int pid, unsigned long long start_address, unsigned long long end_address,
-                 unsigned char *memory, int size, int *read_size);
+int read_memory_by_size(const int pid, unsigned long long start_address, int to_rsz, unsigned char **memory);
+int read_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char **memory);
+bool dump_process_image(const int pid, const char *image_path, const char *dump_path);
+bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size);
 
 /* Virtual Memory Area permissions */
 #define VMA_READ     0x1
@@ -23,7 +25,7 @@ bool read_memory(const int pid, unsigned long long start_address, unsigned long 
 #define VMA_EXEC     0x4
 #define VMA_MAYSHARE 0x8
 
-struct VirtualMemoryArea
+    struct VirtualMemoryArea
 {
     unsigned long long  start_address;
     unsigned long long  end_address;
