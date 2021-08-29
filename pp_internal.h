@@ -5,4 +5,6 @@
     _ret = false;               \
     goto _label;
 
+#define UNKNOWN_INODE 0
+
 #endif

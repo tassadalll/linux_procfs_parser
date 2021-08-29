@@ -131,7 +131,7 @@ bool is_kernel_process(const int pid, bool *is_kp)
     return result;
 }
 
-bool read_command_line(const int pid, char *buffer, unsigned int bsz)
+bool read_command_line(const int pid, char *cmdline, unsigned int bsz)
 {
     bool result = false;
 
@@ -160,7 +160,7 @@ bool read_command_line(const int pid, char *buffer, unsigned int bsz)
         goto done;
     }
 
-    strncpy(buffer, buff, bsz - 1);
+    strncpy(cmdline, buff, bsz - 1);
     result = true;
 
 done:
@@ -176,12 +176,12 @@ done:
     return result;
 }
 
-bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
+bool read_imagepath(const int pid, char *imagepath, unsigned int bsz)
 {
     bool result = false;
 
     char exe_path[32];
-    char buff[PATH_MAX] = "";
+    char buffer[PATH_MAX] = "";
     int length;
 
     if (sprintf(exe_path, "/proc/%d/exe", pid) < 0) {
@@ -189,7 +189,7 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
     }
 
     errno = 0;
-    length = readlink(exe_path, buff, sizeof(buff));
+    length = readlink(exe_path, buffer, sizeof(buffer));
     if( errno != 0 && errno != ENOENT ) {
         return false;
     }
@@ -201,7 +201,7 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
         static const int READLINK_DELETED_STR_LEN = sizeof(" (deleted)") - 1;
 
         if (length > READLINK_DELETED_STR_LEN) {
-            char *cursor = buff + length - READLINK_DELETED_STR_LEN;
+            char *cursor = buffer + length - READLINK_DELETED_STR_LEN;
 
             /* check if it is fileless process or UPX process */
             if (strcmp(cursor, " (deleted)") == 0) {
@@ -210,7 +210,7 @@ bool read_imagepath(const int pid, char *buffer, unsigned int bsz)
         }
     }
 
-    strcpy(buffer, buff);
+    strcpy(imagepath, buffer);
     result = true;
 
 done:
