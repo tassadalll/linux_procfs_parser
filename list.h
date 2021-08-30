@@ -3,8 +3,7 @@
 
 #include <stdbool.h>
 
-struct pp_list;
-typedef struct pp_list *pp_list;
+typedef struct pp_list* pp_list;
 
 pp_list pp_list_create();
 

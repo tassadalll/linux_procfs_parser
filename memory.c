@@ -155,29 +155,29 @@ static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryAr
     return result;
 }
 
-static bool dump_process_image_ex(const int pid, pp_list vma_list, const char *dump_path)
+static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* dump_path)
 {
     bool result = false;
 
     struct VirtualMemoryArea* vma = NULL;
     int vma_count;
     int i;
-    unsigned char *buffer = NULL;
+    unsigned char* buffer = NULL;
     FILE* dump_file = NULL;
     int to_wsz;
     int wsz;
 
     dump_file = fopen(dump_path, "wb");
-    if(dump_file == NULL) {
+    if (dump_file == NULL) {
         ERRGOTO(result, done);
     }
 
     vma_count = pp_list_size(vma_list);
-    if(vma_count <= 0) {
+    if (vma_count <= 0) {
         return false;
     }
 
-    result = pp_list_get(vma_list, 0, &vma);
+    result = pp_list_get(vma_list, 0, (void**)&vma);
     if (!result) {
         goto done;
     }
@@ -188,34 +188,30 @@ static bool dump_process_image_ex(const int pid, pp_list vma_list, const char *d
         goto done;
     }
 
-    free(buffer);
-    buffer = NULL;
-
     to_wsz = (int)(vma->end_address - vma->start_address);
     wsz = fwrite(buffer, 1, to_wsz, dump_file);
     if (wsz < to_wsz) {
-
+        goto done;
     }
 
+    free(buffer);
+    buffer = NULL;
+
     for (i = 1; i < vma_count; i++) {
-        result = pp_list_get(vma_list, i, &vma);
+        result = pp_list_get(vma_list, i, (void**)&vma);
         if (!result) {
             goto done;
         }
 
         result = read_memory_by_address(pid, vma->start_address, vma->end_address, &buffer);
-        if(!result) {
+        if (!result) {
             goto done;
         }
-
-
     }
-
-
 
 done:
 
-    if(buffer) {
+    if (buffer) {
         free(buffer);
     }
 

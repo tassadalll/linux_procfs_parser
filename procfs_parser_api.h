@@ -25,7 +25,7 @@ bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size);
 #define VMA_EXEC     0x4
 #define VMA_MAYSHARE 0x8
 
-    struct VirtualMemoryArea
+struct VirtualMemoryArea
 {
     unsigned long long  start_address;
     unsigned long long  end_address;
