@@ -6,7 +6,7 @@
 
 #include "procfs_parser_api.h"
 #include "pp_internal.h"
-
+#include "elf_parser.h"
 #include "list.h"
 
 static int read_memory(const int pid, unsigned long long start_address, unsigned char **memory, int memsize)
@@ -222,19 +222,20 @@ done:
     return result;
 }
 
-bool dump_process_image(const int pid, const char *dump_path)
+bool dump_process_image(const int pid, const char* dump_path)
 {
     bool result = false;
 
     char image_path[PATH_MAX] = "";
-    struct VirtualMemoryArea* vma = NULL;
+    struct VirtualMemoryArea* VMAs = NULL;
     int vma_count = 0;
     unsigned long long image_inode = 0;
-    int i;
+    struct elf_process* elf_proc = NULL;
     pp_list image_VMAs = NULL;
     bool found = false;
+    int i;
 
-    result = parse_maps_file(pid, &vma, &vma_count);
+    result = parse_maps_file(pid, &VMAs, &vma_count);
     if (!result) {
         goto done;
     }
@@ -244,7 +245,7 @@ bool dump_process_image(const int pid, const char *dump_path)
         goto done;
     }
 
-    found = search_inode_by_imagepath(vma, vma_count, image_path, &image_inode);
+    found = search_inode_by_imagepath(VMAs, vma_count, image_path, &image_inode);
     if (found == false || image_inode == UNKNOWN_INODE) {
         fprintf(stderr, "Cannot find process image area\n");
         ERRGOTO(result, done);
@@ -255,17 +256,29 @@ bool dump_process_image(const int pid, const char *dump_path)
         ERRGOTO(result, done);
     }
 
-    result = select_vma_by_inode(image_inode, vma, vma_count, image_VMAs);
-    if (!result) { 
+    result = select_vma_by_inode(image_inode, VMAs, vma_count, image_VMAs);
+    if (!result) {
         goto done;
     }
 
     
 
+    elf_proc = create_elf_data(pid, VMAs, vma_count);
+    if(!elf_proc) {
+        ERRGOTO(result, done);
+    }
+
+    parse_elf_header(elf_proc);
+    parse_elf_program_header(elf_proc);
+
 done:
 
-    if (vma) {
-        free(vma);
+    if (elf_proc) {
+        destroy_elf_data(elf_proc);
+    }
+
+    if (VMAs) {
+        free(VMAs);
     }
 
     if (image_VMAs) {
