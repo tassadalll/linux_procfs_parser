@@ -22,7 +22,7 @@ static int read_memory(const int pid, FILE* memory_file, unsigned char* buffer, 
     return rsz;
 }
 
-static int read_process_memory(const int pid, unsigned long long start_address, unsigned char* memory, int size)
+int read_process_memory(const int pid, unsigned long long start_address, unsigned char* memory, int size)
 {
     FILE* file = NULL;
     char path[32] = "";
@@ -56,18 +56,12 @@ done:
     return rsz;
 }
 
-
-int read_process_memory_by_size(const int pid, unsigned long long start_address, unsigned char* memory, int size)
-{
-    return read_process_memory(pid, start_address, memory, size);
-}
-
 int read_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char* memory)
 {
     return read_process_memory(pid, start_address, memory, (int)(end_address - start_address));
 }
 
-unsigned char* dump_process_memory_by_size(const int pid, unsigned long long start_address, int size)
+unsigned char* dump_process_memory(const int pid, unsigned long long start_address, int size)
 {
     unsigned char* memory = NULL;
     int rsz;
@@ -93,9 +87,8 @@ unsigned char* dump_process_memory_by_size(const int pid, unsigned long long sta
 
 unsigned char* dump_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address)
 {
-    return dump_process_memory_by_size(pid, start_address, (int)(end_address - start_address));
+    return dump_process_memory(pid, start_address, (int)(end_address - start_address));
 }
-
 
 static bool search_inode_by_imagepath(struct VirtualMemoryArea* vma, int vma_count, const char* image_path, unsigned long long* inode)
 {

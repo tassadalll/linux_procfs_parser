@@ -14,9 +14,9 @@ bool read_imagepath(const int pid, char* imagepath, unsigned int bsz);
 bool attach_process_by_pid(const int pid);
 void detach_process_by_pid(const int pid);
 
-int read_process_memory_by_size(const int pid, unsigned long long start_address, unsigned char* memory, int size);
+int read_process_memory(const int pid, unsigned long long start_address, unsigned char* memory, int size);
 int read_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char* memory);
-unsigned char* dump_process_memory_by_size(const int pid, unsigned long long start_address, int size);
+unsigned char* dump_process_memory(const int pid, unsigned long long start_address, int size);
 unsigned char* dump_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address);
 
 bool dump_process_image(const int pid, const char* dump_path);
