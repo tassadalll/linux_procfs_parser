@@ -23,13 +23,13 @@ struct kernel_version {
 #define VERSION_PREFIX "Linux version"
 #define VERSION_PREFIX_LEN ( sizeof( "Linux version" ) - 1 )
 
-static bool read_kernel_version(struct kernel_version *kversion)
+static bool read_kernel_version(struct kernel_version* kversion)
 {
     bool result = true;
 
-    FILE *vfile = NULL;
+    FILE* vfile = NULL;
     char buffer[32] = "";
-    char *cursor = NULL;
+    char* cursor = NULL;
     struct kernel_version kv = {
         0,
     };
@@ -59,7 +59,7 @@ static bool read_kernel_version(struct kernel_version *kversion)
             SETERRGOTO(result, done);
         }
 
-        *((int *)&kv + i) = (int)version;
+        *((int*)&kv + i) = (int)version;
     }
 
     *kversion = kv;
@@ -79,8 +79,8 @@ done:
         return v1 - v2;         \
     }
 
-static int compare_kernel_version(struct kernel_version *kversion,
-                                  const int major, const int minor, const int patch)
+static int compare_kernel_version(struct kernel_version* kversion,
+    const int major, const int minor, const int patch)
 {
     COMPARE_VERSION(kversion->major, major);
     COMPARE_VERSION(kversion->minor, minor);
@@ -89,7 +89,7 @@ static int compare_kernel_version(struct kernel_version *kversion,
     return 0; // same kernel version
 }
 
-bool is_process_alive(const int pid, bool *is_alive)
+bool is_process_alive(const int pid, bool* is_alive)
 {
     char path[32];
 
@@ -99,14 +99,15 @@ bool is_process_alive(const int pid, bool *is_alive)
 
     if (access(path, F_OK) == 0) {
         *is_alive = true;
-    } else {
+    }
+    else {
         *is_alive = false;
     }
 
     return true;
 }
 
-bool is_user_process(const int pid, bool *is_up)
+bool is_user_process(const int pid, bool* is_up)
 {
     bool result = false;
 
@@ -118,7 +119,7 @@ bool is_user_process(const int pid, bool *is_up)
     return result;
 }
 
-bool is_kernel_process(const int pid, bool *is_kp)
+bool is_kernel_process(const int pid, bool* is_kp)
 {
     bool result = false;
     char buffer[2];
@@ -132,20 +133,20 @@ bool is_kernel_process(const int pid, bool *is_kp)
     return result;
 }
 
-bool read_command_line(const int pid, char *cmdline, unsigned int bsz)
+bool read_command_line(const int pid, char* cmdline, unsigned int bsz)
 {
     bool result = false;
 
     char path[32];
-    FILE *file = NULL;
-    char *buff = NULL;
+    FILE* file = NULL;
+    char* buff = NULL;
     int rsz = 0;
 
     if (sprintf(path, "/proc/%d/cmdline", pid) < 0) {
         return false;
     }
 
-    buff = (char *)malloc(bsz);
+    buff = (char*)malloc(bsz);
     if (buff == NULL) {
         SETERRGOTO(result, done);
     }
@@ -177,7 +178,7 @@ done:
     return result;
 }
 
-bool read_imagepath(const int pid, char *imagepath, unsigned int bsz)
+bool read_imagepath(const int pid, char* imagepath, unsigned int bsz)
 {
     bool result = false;
 
@@ -191,18 +192,19 @@ bool read_imagepath(const int pid, char *imagepath, unsigned int bsz)
 
     errno = 0;
     length = readlink(exe_path, buffer, sizeof(buffer));
-    if( errno != 0 && errno != ENOENT ) {
+    if (errno != 0 && errno != ENOENT) {
         return false;
     }
 
     /* failed or not enough buffer size */
-    if( length <= 0 || length + 1 > bsz) {
+    if (length <= 0 || length + 1 > bsz) {
         return false;
-    } else {
+    }
+    else {
         static const int READLINK_DELETED_STR_LEN = sizeof(" (deleted)") - 1;
 
         if (length > READLINK_DELETED_STR_LEN) {
-            char *cursor = buffer + length - READLINK_DELETED_STR_LEN;
+            char* cursor = buffer + length - READLINK_DELETED_STR_LEN;
 
             /* check if it is fileless process or UPX process */
             if (strcmp(cursor, " (deleted)") == 0) {
@@ -219,7 +221,7 @@ done:
     return result;
 }
 
-void attach_process_by_pid(const int pid, bool *is_attached)
+void attach_process_by_pid(const int pid, bool* is_attached)
 {
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
         *is_attached = false;

@@ -9,23 +9,23 @@
 #include "elf_parser.h"
 #include "list.h"
 
-static int read_memory(const int pid, unsigned long long start_address, unsigned char **memory, int memsize)
+static int read_memory(const int pid, unsigned long long start_address, unsigned char** memory, int memsize)
 {
     bool result = false;
 
-    FILE *file = NULL;
+    FILE* file = NULL;
     char path[32] = "";
     bool is_attached = false;
-    unsigned char *buffer = NULL;
+    unsigned char* buffer = NULL;
     int read_size = 0;
 
     if (memory == NULL || start_address < 0 || memsize <= 0) {
         return false;
     }
 
-    buffer = (unsigned char *)malloc(memsize);
+    buffer = (unsigned char*)malloc(memsize);
     if (!buffer) {
-        return false; 
+        return false;
     }
 
     if (sprintf(path, "/proc/%d/mem", pid) < 0) {
@@ -57,35 +57,35 @@ static int read_memory(const int pid, unsigned long long start_address, unsigned
 
 done:
 
-    if(is_attached) {
+    if (is_attached) {
         detach_process_by_pid(pid);
     }
 
-    if(file) {
+    if (file) {
         fclose(file);
     }
 
-    if(buffer) {
+    if (buffer) {
         free(buffer);
     }
 
     return read_size;
 }
 
-int read_memory_by_size(const int pid, unsigned long long start_address, int to_rsz, unsigned char **memory)
+int read_memory_by_size(const int pid, unsigned long long start_address, int to_rsz, unsigned char** memory)
 {
     return read_memory(pid, start_address, memory, to_rsz);
 }
 
 int read_memory_by_address(const int pid,
-                 unsigned long long start_address, unsigned long long end_address, unsigned char **memory)
+    unsigned long long start_address, unsigned long long end_address, unsigned char** memory)
 {
     int memsize = (int)(end_address - start_address);
 
     return read_memory(pid, start_address, memory, memsize);
 }
 
-static bool search_inode_by_imagepath(struct VirtualMemoryArea *vma, int vma_count, const char* image_path, unsigned long long *inode)
+static bool search_inode_by_imagepath(struct VirtualMemoryArea* vma, int vma_count, const char* image_path, unsigned long long* inode)
 {
     bool found = false;
     int i;
@@ -101,13 +101,13 @@ static bool search_inode_by_imagepath(struct VirtualMemoryArea *vma, int vma_cou
     return found;
 }
 
-bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size)
+bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
 {
     bool result = false;
 
     struct VirtualMemoryArea* vma = NULL;
     int vma_count = 0;
-    char *memory = NULL;
+    char* memory = NULL;
     int size = 0;
     int i;
 
@@ -120,12 +120,12 @@ bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size)
         }
     }
 
-    if(i == vma_count) {
+    if (i == vma_count) {
         SETERRGOTO(result, done); // failed to find stack area
     }
 
     *stack_size = read_memory_by_address(pid, vma[i].start_address, vma[i].end_address, stack);
-    if(*stack_size <= 0) {
+    if (*stack_size <= 0) {
         SETERRGOTO(result, done);
     }
 
@@ -134,13 +134,13 @@ done:
     return result;
 }
 
-static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea *vma, int vma_count, pp_list selected_VMAs)
+static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea* vma, int vma_count, pp_list selected_VMAs)
 {
     bool result = true;
     int i;
 
     for (i = 0; i < vma_count; i++) {
-        struct VirtualMemoryArea *cursor = &vma[i];
+        struct VirtualMemoryArea* cursor = &vma[i];
 
         if (cursor->inode == inode) {
             result = pp_list_rpush(selected_VMAs, cursor);
@@ -250,7 +250,7 @@ bool dump_process_image(const int pid, const char* dump_path)
     }
 
     elf_proc = create_elf_data(pid, VMAs, vma_count);
-    if(!elf_proc) {
+    if (!elf_proc) {
         SETERRGOTO(result, done);
     }
 
@@ -281,7 +281,7 @@ done:
         ptr++;                                 \
     }
 
-static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_vma)
+static bool parse_maps_line(const char* line, struct VirtualMemoryArea** parsed_vma)
 {
     bool result = false;
 
@@ -290,7 +290,7 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
     int remain_size;
 
     vma = malloc(sizeof(struct VirtualMemoryArea));
-    if(!vma) {
+    if (!vma) {
         return false;
     }
     memset(vma, 0x00, sizeof(struct VirtualMemoryArea));
@@ -298,11 +298,11 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
     errno = 0;
     vma->start_address = strtoull(line, &cursor, 16);
     MAPS_LINE_CHK(cursor, '-', done);
-    
+
     vma->end_address = strtoull(cursor, &cursor, 16);
     MAPS_LINE_CHK(cursor, ' ', done);
 
-    if( strlen(cursor) < 5 ) {
+    if (strlen(cursor) < 5) {
         goto done;
     }
 
@@ -317,7 +317,7 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
     if (cursor[2] == 'x') {
         vma->permissions |= VMA_EXEC;
     }
-    
+
     /* could be come 'p(=private)' or 's(=share)' */
     if (cursor[3] == 's') {
         vma->permissions |= VMA_MAYSHARE;
@@ -329,7 +329,7 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
 
     vma->device_major = (unsigned char)strtol(cursor, &cursor, 16);
     MAPS_LINE_CHK(cursor, ':', done);
-    
+
     vma->device_minor = (unsigned char)strtol(cursor, &cursor, 16);
     MAPS_LINE_CHK(cursor, ' ', done);
 
@@ -337,13 +337,14 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
     MAPS_LINE_CHK(cursor, ' ', done);
 
     /* skip whitespace */
-    while(*cursor == ' ') {
+    while (*cursor == ' ') {
         cursor++;
     }
 
-    if(*cursor == '\n') {
+    if (*cursor == '\n') {
         /* end of line, this VMA has no pathname */
-    } else {
+    }
+    else {
         int remain = strlen(cursor) - 1; // - newline
         strncpy(vma->pathname, cursor, remain);
         vma->pathname[remain] = '\0';
@@ -356,14 +357,14 @@ static bool parse_maps_line(const char *line, struct VirtualMemoryArea **parsed_
 
 done:
 
-    if(vma) {
+    if (vma) {
         free(vma);
     }
 
     return result;
 }
 
-bool parse_maps_file(const int pid, struct VirtualMemoryArea **parsed_vma, int *vma_count)
+bool parse_maps_file(const int pid, struct VirtualMemoryArea** parsed_vma, int* vma_count)
 {
     bool result = false;
 
@@ -394,13 +395,13 @@ bool parse_maps_file(const int pid, struct VirtualMemoryArea **parsed_vma, int *
     }
 
     /* parse maps file line by line */
-    while(fgets(buffer, sizeof(buffer), file) != NULL) {
+    while (fgets(buffer, sizeof(buffer), file) != NULL) {
         result = parse_maps_line(buffer, &vma);
         if (!result) {
             goto done;
         }
 
-        result = pp_list_rpush( list, (void*)vma );
+        result = pp_list_rpush(list, (void*)vma);
         if (!result) {
             goto done;
         }
@@ -409,14 +410,14 @@ bool parse_maps_file(const int pid, struct VirtualMemoryArea **parsed_vma, int *
 
     count = pp_list_size(list);
     vma = malloc(sizeof(struct VirtualMemoryArea) * count);
-    if(!vma) {
+    if (!vma) {
         goto done;
     }
 
     for (i = 0; i < count; i++) {
-        struct VirtualMemoryArea *tmp = NULL;
+        struct VirtualMemoryArea* tmp = NULL;
 
-        result = pp_list_get(list, i, (void **)&tmp);
+        result = pp_list_get(list, i, (void**)&tmp);
         if (!result) {
             goto done;
         }
