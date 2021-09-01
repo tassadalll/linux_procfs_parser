@@ -8,42 +8,39 @@
 
 struct elf_process* create_elf_data(int pid, struct VirtualMemoryArea* VMAs, int vma_count)
 {
-    struct elf_process* e_proc = NULL;
+    bool result = true;
+
+    struct elf_process* process = NULL;
     int i;
 
-    e_proc = calloc(1, sizeof(struct elf_process));
-    if (!e_proc) {
-        return NULL;
-    }
+    process = calloc(1, sizeof(struct elf_process));
+    NULLERRGOTO(process, result, done);
 
-    e_proc->pid = pid;
-    e_proc->VMAs = VMAs;
-    e_proc->vma_count = vma_count;
+    process->pid = pid;
+    process->VMAs = VMAs;
+    process->vma_count = vma_count;
 
-    e_proc->vma_buffers = calloc(vma_count, sizeof(unsigned char*));
-    if (!e_proc->vma_buffers) {
-        goto err;
-    }
+    process->vma_buffers = calloc(vma_count, sizeof(unsigned char*));
+    NULLERRGOTO(process->vma_buffers, result, done);
 
     for (i = 0; i < 5; i++) {
-        bool result = read_memory_by_address(pid,
-            VMAs[i].start_address, VMAs[i].end_address,
-            &e_proc->vma_buffers[i]);
-        IFERRGOTO(result, err);
+        process->vma_buffers[i] = dump_process_memory_by_address(pid, VMAs[i].start_address, VMAs[i].end_address);
+        NULLERRGOTO(process->vma_buffers[i], result, done);
     }
 
-    return e_proc;
+done:
 
-err:
+    if (result == false) {
+        destroy_elf_data(process);
+        process = NULL;
+    }
 
-    destroy_elf_data(e_proc);
-
-    return NULL;
+    return process;
 }
 
 void destroy_elf_data(struct elf_process* e_proc)
 {
-    if (!e_proc) {
+    if (e_proc == NULL) {
         return;
     }
 
@@ -78,9 +75,7 @@ bool parse_elf_header(struct elf_process* e_proc)
     Elf64_Ehdr* elf_hdr64 = NULL;
 
     elf_hdr64 = malloc(sizeof(Elf64_Ehdr));
-    if (!elf_hdr64) {
-        SETERRGOTO(result, done);
-    }
+    NULLERRGOTO(elf_hdr64, result, done);
 
     elf_buffer = e_proc->vma_buffers[0];
 

@@ -221,16 +221,15 @@ done:
     return result;
 }
 
-void attach_process_by_pid(const int pid, bool* is_attached)
+bool attach_process_by_pid(const int pid)
 {
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
-        *is_attached = false;
-        return;
+        return false;
     }
 
-    *is_attached = true;
-
     waitpid(pid, NULL, 0);
+
+    return true;
 }
 
 void detach_process_by_pid(const int pid)

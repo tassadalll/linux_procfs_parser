@@ -9,81 +9,93 @@
 #include "elf_parser.h"
 #include "list.h"
 
-static int read_memory(const int pid, unsigned long long start_address, unsigned char** memory, int memsize)
+static int read_memory(const int pid, FILE* memory_file, unsigned char* buffer, int size)
 {
-    bool result = false;
+    int rsz = -1;
 
-    FILE* file = NULL;
-    char path[32] = "";
-    bool is_attached = false;
-    unsigned char* buffer = NULL;
-    int read_size = 0;
+    if (attach_process_by_pid(pid) == true) {
+        rsz = fread(buffer, 1, size, memory_file);
 
-    if (memory == NULL || start_address < 0 || memsize <= 0) {
-        return false;
+        detach_process_by_pid(pid);
     }
 
-    buffer = (unsigned char*)malloc(memsize);
-    if (!buffer) {
-        return false;
+    return rsz;
+}
+
+static int read_process_memory(const int pid, unsigned long long start_address, unsigned char* memory, int size)
+{
+    FILE* file = NULL;
+    char path[32] = "";
+    int rsz = -1;
+
+    if (size <= 0) {
+        return -1;
     }
 
     if (sprintf(path, "/proc/%d/mem", pid) < 0) {
-        SETERRGOTO(result, done);
+        return -1;
     }
 
     file = fopen(path, "rb");
-    if (!file) {
-        SETERRGOTO(result, done);
-    }
-
-    /* if the attach fails, `/proc/[pid]/mem` file cannot be read */
-    attach_process_by_pid(pid, &is_attached);
-    if (is_attached == false) {
-        SETERRGOTO(result, done);
+    if (file == NULL) {
+        goto done;
     }
 
     if (fseek(file, (long)start_address, SEEK_SET) != 0) {
-        SETERRGOTO(result, done);
+        goto done;
     }
 
-    read_size = fread(buffer, 1, memsize, file);
-    if (read_size < memsize) {
-        SETERRGOTO(result, done);
-    }
-
-    *memory = buffer;
-    buffer = NULL;
+    rsz = read_memory(pid, file, memory, size);
 
 done:
-
-    if (is_attached) {
-        detach_process_by_pid(pid);
-    }
 
     if (file) {
         fclose(file);
     }
 
-    if (buffer) {
-        free(buffer);
+    return rsz;
+}
+
+
+int read_process_memory_by_size(const int pid, unsigned long long start_address, unsigned char* memory, int size)
+{
+    return read_process_memory(pid, start_address, memory, size);
+}
+
+int read_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address, unsigned char* memory)
+{
+    return read_process_memory(pid, start_address, memory, (int)(end_address - start_address));
+}
+
+unsigned char* dump_process_memory_by_size(const int pid, unsigned long long start_address, int size)
+{
+    unsigned char* memory = NULL;
+    int rsz;
+
+    if (size <= 0) {
+        return NULL;
     }
 
-    return read_size;
+    memory = malloc(size);
+    if (memory == NULL) {
+        return NULL;
+    }
+
+    rsz = read_process_memory(pid, start_address, memory, size);
+    if (rsz < size) {
+        /* all requested memory size must be read */
+        free(memory);
+        memory = NULL;
+    }
+
+    return memory;
 }
 
-int read_memory_by_size(const int pid, unsigned long long start_address, int to_rsz, unsigned char** memory)
+unsigned char* dump_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address)
 {
-    return read_memory(pid, start_address, memory, to_rsz);
+    return dump_process_memory_by_size(pid, start_address, (int)(end_address - start_address));
 }
 
-int read_memory_by_address(const int pid,
-    unsigned long long start_address, unsigned long long end_address, unsigned char** memory)
-{
-    int memsize = (int)(end_address - start_address);
-
-    return read_memory(pid, start_address, memory, memsize);
-}
 
 static bool search_inode_by_imagepath(struct VirtualMemoryArea* vma, int vma_count, const char* image_path, unsigned long long* inode)
 {
@@ -101,13 +113,14 @@ static bool search_inode_by_imagepath(struct VirtualMemoryArea* vma, int vma_cou
     return found;
 }
 
+
 bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
 {
     bool result = false;
 
     struct VirtualMemoryArea* vma = NULL;
+    unsigned char* buffer = NULL;
     int vma_count = 0;
-    char* memory = NULL;
     int size = 0;
     int i;
 
@@ -115,6 +128,9 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
     IFERRGOTO(result, done);
 
     for (i = 0; i < vma_count; i++) {
+        // TODO: dump stack of each thread( VMA with pathname "[stack:\d+]" ) 
+        // only the main thread stack is being dumped
+
         if (strcmp(vma[i].pathname, "[stack]") == 0) {
             break;
         }
@@ -124,10 +140,15 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
         SETERRGOTO(result, done); // failed to find stack area
     }
 
-    *stack_size = read_memory_by_address(pid, vma[i].start_address, vma[i].end_address, stack);
-    if (*stack_size <= 0) {
+    size = (int)(vma[i].end_address - vma[i].start_address);
+
+    buffer = dump_process_memory_by_size(pid, vma[i].start_address, size);
+    if (buffer == NULL) {
         SETERRGOTO(result, done);
     }
+
+    *stack = buffer;
+    *stack_size = size;
 
 done:
 
@@ -153,7 +174,7 @@ static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryAr
     return result;
 }
 
-static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* dump_path)
+static bool dump_process_image_ex(const int pid, pp_list VMAs, const char* dump_path)
 {
     bool result = false;
 
@@ -165,24 +186,21 @@ static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* d
     int to_wsz;
     int wsz;
 
-    dump_file = fopen(dump_path, "wb");
-    if (dump_file == NULL) {
-        SETERRGOTO(result, done);
-    }
-
-    vma_count = pp_list_size(vma_list);
+    vma_count = pp_list_size(VMAs);
     if (vma_count <= 0) {
         SETERRGOTO(result, done);
     }
 
-    result = pp_list_get(vma_list, 0, (void**)&vma);
+    dump_file = fopen(dump_path, "wb");
+    NULLERRGOTO(dump_file, result, done);
+
+    result = pp_list_get(VMAs, 0, (void**)&vma);
     IFERRGOTO(result, done);
 
     to_wsz = (int)(vma->end_address - vma->start_address);
-    result = read_memory_by_size(pid, vma->start_address, to_wsz, &buffer);
-    IFERRGOTO(result, done);
+    buffer = dump_process_memory_by_size(pid, vma->start_address, to_wsz);
+    NULLERRGOTO(buffer, result, done);
 
-    to_wsz = (int)(vma->end_address - vma->start_address);
     wsz = fwrite(buffer, 1, to_wsz, dump_file);
     if (wsz < to_wsz) {
         SETERRGOTO(result, done);
@@ -192,13 +210,11 @@ static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* d
     buffer = NULL;
 
     for (i = 1; i < vma_count; i++) {
-        result = pp_list_get(vma_list, i, (void**)&vma);
+        result = pp_list_get(VMAs, i, (void**)&vma);
         IFERRGOTO(result, done);
 
-        result = read_memory_by_address(pid, vma->start_address, vma->end_address, &buffer);
-        if (!result) {
-            goto done;
-        }
+        buffer = dump_process_memory_by_address(pid, vma->start_address, vma->end_address);
+        NULLERRGOTO(buffer, result, done);
     }
 
 done:
@@ -240,19 +256,13 @@ bool dump_process_image(const int pid, const char* dump_path)
     }
 
     image_VMAs = pp_list_create();
-    if (image_VMAs == NULL) {
-        SETERRGOTO(result, done);
-    }
+    NULLERRGOTO(image_VMAs, result, done);
 
     result = select_vma_by_inode(image_inode, VMAs, vma_count, image_VMAs);
-    if (!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     elf_proc = create_elf_data(pid, VMAs, vma_count);
-    if (!elf_proc) {
-        SETERRGOTO(result, done);
-    }
+    NULLERRGOTO(elf_proc, result, done);
 
     parse_elf_header(elf_proc);
     parse_elf_program_header(elf_proc);
@@ -274,25 +284,24 @@ done:
     return result;
 }
 
+
 #define MAPS_LINE_CHK(ptr, expected_ch, label) \
     if (errno != 0 || *ptr != expected_ch) {   \
-        goto label;                            \
+        SETERRGOTO(result, done);              \
     } else {                                   \
         ptr++;                                 \
     }
 
 static bool parse_maps_line(const char* line, struct VirtualMemoryArea** parsed_vma)
 {
-    bool result = false;
+    bool result = true;
 
     struct VirtualMemoryArea* vma = NULL;
     char* cursor = NULL;
     int remain_size;
 
     vma = malloc(sizeof(struct VirtualMemoryArea));
-    if (!vma) {
-        return false;
-    }
+    NULLERRGOTO(vma, result, done);
     memset(vma, 0x00, sizeof(struct VirtualMemoryArea));
 
     errno = 0;
@@ -353,8 +362,6 @@ static bool parse_maps_line(const char* line, struct VirtualMemoryArea** parsed_
     *parsed_vma = vma;
     vma = NULL;
 
-    result = true;
-
 done:
 
     if (vma) {
@@ -364,10 +371,11 @@ done:
     return result;
 }
 
-bool parse_maps_file(const int pid, struct VirtualMemoryArea** parsed_vma, int* vma_count)
+bool parse_maps_file(const int pid, struct VirtualMemoryArea** parsed_VMAs, int* vma_count)
 {
-    bool result = false;
+    bool result = true;
 
+    struct VirtualMemoryArea* VMAs = NULL;
     struct VirtualMemoryArea* vma = NULL;
     FILE* file = NULL;
     pp_list list = NULL;
@@ -376,67 +384,55 @@ bool parse_maps_file(const int pid, struct VirtualMemoryArea** parsed_vma, int* 
     int count;
     int i;
 
-    if (!parsed_vma || !vma_count) {
-        return false;
-    }
-
     if (sprintf(path, "/proc/%d/maps", pid) < 0) {
         return false;
     }
 
     file = fopen(path, "r");
-    if (!file) {
-        goto done;
-    }
+    NULLERRGOTO(file, result, done);
 
     list = pp_list_create();
-    if (!list) {
-        goto done;
-    }
+    NULLERRGOTO(list, result, done);
 
     /* parse maps file line by line */
     while (fgets(buffer, sizeof(buffer), file) != NULL) {
         result = parse_maps_line(buffer, &vma);
-        if (!result) {
-            goto done;
-        }
+        IFERRGOTO(result, done);
 
         result = pp_list_rpush(list, (void*)vma);
-        if (!result) {
-            goto done;
-        }
+        IFERRGOTO(result, done);
+
         vma = NULL;
     }
 
     count = pp_list_size(list);
-    vma = malloc(sizeof(struct VirtualMemoryArea) * count);
-    if (!vma) {
-        goto done;
-    }
+    VMAs = malloc(sizeof(struct VirtualMemoryArea) * count);
+    NULLERRGOTO(VMAs, result, done);
 
     for (i = 0; i < count; i++) {
-        struct VirtualMemoryArea* tmp = NULL;
+        result = pp_list_lpop(list, (void**)&vma);
+        IFERRGOTO(result, done);
 
-        result = pp_list_get(list, i, (void**)&tmp);
-        if (!result) {
-            goto done;
-        }
-
-        vma[i] = *tmp;
+        VMAs[i] = *vma;
+        vma = NULL;
     }
 
     *vma_count = count;
-    *parsed_vma = vma;
-    vma = NULL;
+    *parsed_VMAs = VMAs;
+    VMAs = NULL;
 
 done:
 
     if (list) {
-        pp_list_destroy(list);
+        pp_list_destroy_with_nodes(list, NULL);
     }
 
     if (file) {
         fclose(file);
+    }
+
+    if (VMAs) {
+        free(VMAs);
     }
 
     if (vma) {

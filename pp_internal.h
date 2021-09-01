@@ -10,6 +10,12 @@
         goto _label;              \
     }
 
+#define NULLERRGOTO( _var, _ret, _label ) \
+    if( _var == NULL ) {                  \
+        _ret = false;                     \
+        goto _label;                      \
+    }
+
 #define UNKNOWN_INODE 0
 
 #endif
