@@ -77,7 +77,7 @@ unsigned char* dump_process_memory(const int pid, unsigned long long start_addre
 
     rsz = read_process_memory(pid, start_address, memory, size);
     if (rsz < size) {
-        /* all requested memory size must be read */
+        /* fail if less than the requested size is read */
         free(memory);
         memory = NULL;
     }
@@ -111,13 +111,13 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
 {
     bool result = false;
 
-    struct VirtualMemoryArea* vma = NULL;
+    struct VirtualMemoryArea* VMAs = NULL;
     unsigned char* buffer = NULL;
     int vma_count = 0;
     int size = 0;
     int i;
 
-    result = parse_maps_file(pid, &vma, &vma_count);
+    result = parse_maps_file(pid, &VMAs, &vma_count);
     IFERRGOTO(result, done);
 
     for (i = 0; i < vma_count; i++) {
@@ -133,9 +133,9 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
         SETERRGOTO(result, done); // failed to find stack area
     }
 
-    size = (int)(vma[i].end_address - vma[i].start_address);
+    size = (int)(VMAs[i].end_address - VMAs[i].start_address);
 
-    buffer = dump_process_memory_by_size(pid, vma[i].start_address, size);
+    buffer = dump_process_memory_by_size(pid, VMAs[i].start_address, size);
     if (buffer == NULL) {
         SETERRGOTO(result, done);
     }
@@ -148,17 +148,17 @@ done:
     return result;
 }
 
-static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea* vma, int vma_count, pp_list selected_VMAs)
+static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea* VMAs, int vma_count, pp_list selected_VMAs)
 {
     bool result = true;
     int i;
 
     for (i = 0; i < vma_count; i++) {
-        struct VirtualMemoryArea* cursor = &vma[i];
+        struct VirtualMemoryArea* cursor = &VMAs[i];
 
         if (cursor->inode == inode) {
             result = pp_list_rpush(selected_VMAs, cursor);
-            if (!result) {
+            if (result == false) {
                 break;
             }
         }

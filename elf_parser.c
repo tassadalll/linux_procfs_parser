@@ -38,36 +38,36 @@ done:
     return process;
 }
 
-void destroy_elf_data(struct elf_process* e_proc)
+void destroy_elf_data(struct elf_process* process)
 {
-    if (e_proc == NULL) {
+    if (process == NULL) {
         return;
     }
 
-    if (e_proc->hdr) {
-        free(e_proc->hdr);
+    if (process->hdr) {
+        free(process->hdr);
     }
 
-    if (e_proc->phdr) {
-        free(e_proc->phdr);
+    if (process->phdr) {
+        free(process->phdr);
     }
 
-    if (e_proc->vma_buffers) {
+    if (process->vma_buffers) {
         int i;
 
-        for (i = 0; i < e_proc->vma_count; i++) {
-            if (e_proc->vma_buffers[i]) {
-                free(e_proc->vma_buffers[i]);
+        for (i = 0; i < process->vma_count; i++) {
+            if (process->vma_buffers[i]) {
+                free(process->vma_buffers[i]);
             }
         }
 
-        free(e_proc->vma_buffers);
+        free(process->vma_buffers);
     }
 
-    free(e_proc);
+    free(process);
 }
 
-bool parse_elf_header(struct elf_process* e_proc)
+bool parse_elf_header(struct elf_process* process)
 {
     bool result = true;
 
@@ -77,7 +77,7 @@ bool parse_elf_header(struct elf_process* e_proc)
     elf_hdr64 = malloc(sizeof(Elf64_Ehdr));
     NULLERRGOTO(elf_hdr64, result, done);
 
-    elf_buffer = e_proc->vma_buffers[0];
+    elf_buffer = process->vma_buffers[0];
 
     if (memcmp(elf_buffer, ELFMAG, SELFMAG) != 0) {
         SETERRGOTO(result, done);
@@ -97,7 +97,7 @@ bool parse_elf_header(struct elf_process* e_proc)
         memcpy(elf_hdr64, elf_buffer, sizeof(Elf64_Ehdr));
     }
 
-    e_proc->hdr = elf_hdr64;
+    process->hdr = elf_hdr64;
     elf_hdr64 = NULL;
 
 done:
@@ -109,7 +109,7 @@ done:
     return result;
 }
 
-bool parse_elf_program_header(struct elf_process* e_proc)
+bool parse_elf_program_header(struct elf_process* process)
 {
     bool result = false;
 
@@ -118,22 +118,22 @@ bool parse_elf_program_header(struct elf_process* e_proc)
     int ph_idx;
     int i;
 
-    e_proc->phdr = calloc(e_proc->hdr->e_phnum, sizeof(Elf64_Phdr));
-    if (!e_proc->phdr) {
+    process->phdr = calloc(process->hdr->e_phnum, sizeof(Elf64_Phdr));
+    if (process->phdr == NULL) {
         return false;
     }
 
-    for (i = 0; i < e_proc->vma_count - 1; i++) {
-        if (e_proc->VMAs[i + 1].file_offset > e_proc->hdr->e_phoff) {
+    for (i = 0; i < process->vma_count - 1; i++) {
+        if (process->VMAs[i + 1].file_offset > process->hdr->e_phoff) {
             ph_idx = i;
             break;
         }
     }
 
-    ph_relative_offset = e_proc->hdr->e_phoff - e_proc->VMAs[ph_idx].file_offset;
-    cursor = e_proc->vma_buffers[ph_idx] + ph_relative_offset;
+    ph_relative_offset = process->hdr->e_phoff - process->VMAs[ph_idx].file_offset;
+    cursor = process->vma_buffers[ph_idx] + ph_relative_offset;
 
-    memcpy(e_proc->phdr, cursor, sizeof(Elf64_Phdr) * e_proc->hdr->e_phnum);
+    memcpy(process->phdr, cursor, sizeof(Elf64_Phdr) * process->hdr->e_phnum);
 
     return result;
 }
