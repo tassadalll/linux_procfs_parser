@@ -1,5 +1,3 @@
-#include "procfs_parser_api.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +11,9 @@
 #include <sys/ptrace.h>
 #include <wait.h>
 
+#include "procfs_parser_api.h"
+#include "pp_internal.h"
+
 struct kernel_version {
     int major;
     int minor;
@@ -24,7 +25,7 @@ struct kernel_version {
 
 static bool read_kernel_version(struct kernel_version *kversion)
 {
-    bool result = false;
+    bool result = true;
 
     FILE *vfile = NULL;
     char buffer[32] = "";
@@ -35,16 +36,16 @@ static bool read_kernel_version(struct kernel_version *kversion)
 
     vfile = fopen("/proc/version", "r");
     if (!vfile) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     if (fread(buffer, 1, sizeof(buffer), vfile) < sizeof(buffer)) {
-        goto done;
+        SETERRGOTO(result, done);
     }
     buffer[sizeof(buffer) - 1] = '\0';
 
     if (strncmp(buffer, VERSION_PREFIX, VERSION_PREFIX_LEN) != 0) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     cursor = buffer + VERSION_PREFIX_LEN;
@@ -55,7 +56,7 @@ static bool read_kernel_version(struct kernel_version *kversion)
         errno = 0;
         version = strtol(cursor, &cursor, 10);
         if (errno != 0) {
-            goto done;
+            SETERRGOTO(result, done);
         }
 
         *((int *)&kv + i) = (int)version;
@@ -146,18 +147,18 @@ bool read_command_line(const int pid, char *cmdline, unsigned int bsz)
 
     buff = (char *)malloc(bsz);
     if (buff == NULL) {
-        goto done;
+        SETERRGOTO(result, done);
     }
     memset(buff, 0, bsz);
 
     file = fopen(path, "r");
     if (file == NULL) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     rsz = fread(buff, 1, bsz, file);
     if (rsz == 0) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     strncpy(cmdline, buff, bsz - 1);
@@ -228,12 +229,11 @@ void attach_process_by_pid(const int pid, bool *is_attached)
     *is_attached = true;
 
     waitpid(pid, NULL, 0);
-    /* result consumed */
 }
 
 void detach_process_by_pid(const int pid)
 {
     if (ptrace(PTRACE_DETACH, pid, NULL, NULL) != -1) {
-        // failed to detach, but can do nothing
+        // failed to detach, but cannot do nothing
     }
 }

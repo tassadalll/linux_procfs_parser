@@ -29,27 +29,27 @@ static int read_memory(const int pid, unsigned long long start_address, unsigned
     }
 
     if (sprintf(path, "/proc/%d/mem", pid) < 0) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     file = fopen(path, "rb");
     if (!file) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     /* if the attach fails, `/proc/[pid]/mem` file cannot be read */
     attach_process_by_pid(pid, &is_attached);
     if (is_attached == false) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     if (fseek(file, (long)start_address, SEEK_SET) != 0) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     read_size = fread(buffer, 1, memsize, file);
     if (read_size < memsize) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     *memory = buffer;
@@ -112,9 +112,7 @@ bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size)
     int i;
 
     result = parse_maps_file(pid, &vma, &vma_count);
-    if(!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     for (i = 0; i < vma_count; i++) {
         if (strcmp(vma[i].pathname, "[stack]") == 0) {
@@ -123,12 +121,12 @@ bool dump_process_stack(const int pid, unsigned char **stack, int *stack_size)
     }
 
     if(i == vma_count) {
-        ERRGOTO(result, done); // failed to find stack area
+        SETERRGOTO(result, done); // failed to find stack area
     }
 
     *stack_size = read_memory_by_address(pid, vma[i].start_address, vma[i].end_address, stack);
     if(*stack_size <= 0) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
 done:
@@ -169,29 +167,25 @@ static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* d
 
     dump_file = fopen(dump_path, "wb");
     if (dump_file == NULL) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     vma_count = pp_list_size(vma_list);
     if (vma_count <= 0) {
-        return false;
+        SETERRGOTO(result, done);
     }
 
     result = pp_list_get(vma_list, 0, (void**)&vma);
-    if (!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     to_wsz = (int)(vma->end_address - vma->start_address);
     result = read_memory_by_size(pid, vma->start_address, to_wsz, &buffer);
-    if (!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     to_wsz = (int)(vma->end_address - vma->start_address);
     wsz = fwrite(buffer, 1, to_wsz, dump_file);
     if (wsz < to_wsz) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     free(buffer);
@@ -199,9 +193,7 @@ static bool dump_process_image_ex(const int pid, pp_list vma_list, const char* d
 
     for (i = 1; i < vma_count; i++) {
         result = pp_list_get(vma_list, i, (void**)&vma);
-        if (!result) {
-            goto done;
-        }
+        IFERRGOTO(result, done);
 
         result = read_memory_by_address(pid, vma->start_address, vma->end_address, &buffer);
         if (!result) {
@@ -236,24 +228,20 @@ bool dump_process_image(const int pid, const char* dump_path)
     int i;
 
     result = parse_maps_file(pid, &VMAs, &vma_count);
-    if (!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     result = read_imagepath(pid, image_path, sizeof(image_path));
-    if (!result) {
-        goto done;
-    }
+    IFERRGOTO(result, done);
 
     found = search_inode_by_imagepath(VMAs, vma_count, image_path, &image_inode);
     if (found == false || image_inode == UNKNOWN_INODE) {
         fprintf(stderr, "Cannot find process image area\n");
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     image_VMAs = pp_list_create();
     if (image_VMAs == NULL) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     result = select_vma_by_inode(image_inode, VMAs, vma_count, image_VMAs);
@@ -261,11 +249,9 @@ bool dump_process_image(const int pid, const char* dump_path)
         goto done;
     }
 
-    
-
     elf_proc = create_elf_data(pid, VMAs, vma_count);
     if(!elf_proc) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     parse_elf_header(elf_proc);

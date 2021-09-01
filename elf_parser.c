@@ -21,15 +21,15 @@ struct elf_process* create_elf_data(int pid, struct VirtualMemoryArea* VMAs, int
     e_proc->vma_count = vma_count;
 
     e_proc->vma_buffers = calloc(vma_count, sizeof(unsigned char*));
-    if(!e_proc->vma_buffers) {
+    if (!e_proc->vma_buffers) {
         goto err;
     }
 
     for (i = 0; i < 5; i++) {
-        bool result = read_memory_by_address(pid, VMAs[i].start_address, VMAs[i].end_address, &e_proc->vma_buffers[i]);
-        if (result == false) {
-            goto err;
-        }
+        bool result = read_memory_by_address(pid,
+            VMAs[i].start_address, VMAs[i].end_address,
+            &e_proc->vma_buffers[i]);
+        IFERRGOTO(result, err);
     }
 
     return e_proc;
@@ -72,19 +72,20 @@ void destroy_elf_data(struct elf_process* e_proc)
 
 bool parse_elf_header(struct elf_process* e_proc)
 {
-    bool result = false;
+    bool result = true;
+
     unsigned char* elf_buffer = NULL;
     Elf64_Ehdr* elf_hdr64 = NULL;
 
     elf_hdr64 = malloc(sizeof(Elf64_Ehdr));
     if (!elf_hdr64) {
-        goto done;
+        SETERRGOTO(result, done);
     }
 
     elf_buffer = e_proc->vma_buffers[0];
 
     if (memcmp(elf_buffer, ELFMAG, SELFMAG) != 0) {
-        ERRGOTO(result, done);
+        SETERRGOTO(result, done);
     }
 
     if (elf_buffer[EI_CLASS] == ELFCLASS32) {
@@ -100,7 +101,7 @@ bool parse_elf_header(struct elf_process* e_proc)
     else { // = ELFCLASS64
         memcpy(elf_hdr64, elf_buffer, sizeof(Elf64_Ehdr));
     }
-    
+
     e_proc->hdr = elf_hdr64;
     elf_hdr64 = NULL;
 
