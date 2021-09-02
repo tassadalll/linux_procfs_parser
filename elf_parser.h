@@ -16,6 +16,7 @@ struct elf_process
     unsigned char** vma_buffers;
     int vma_count;
 
+    bool is_elf32;
     Elf64_Ehdr* hdr;
     Elf64_Phdr* phdr;
 };

@@ -124,7 +124,7 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
         // TODO: dump stack of each thread( VMA with pathname "[stack:\d+]" ) 
         // only the main thread stack is being dumped
 
-        if (strcmp(vma[i].pathname, "[stack]") == 0) {
+        if (strcmp(VMAs[i].pathname, "[stack]") == 0) {
             break;
         }
     }
@@ -135,10 +135,8 @@ bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size)
 
     size = (int)(VMAs[i].end_address - VMAs[i].start_address);
 
-    buffer = dump_process_memory_by_size(pid, VMAs[i].start_address, size);
-    if (buffer == NULL) {
-        SETERRGOTO(result, done);
-    }
+    buffer = dump_process_memory(pid, VMAs[i].start_address, size);
+    NULLERRGOTO(buffer, result, done);
 
     *stack = buffer;
     *stack_size = size;
@@ -173,11 +171,11 @@ static bool dump_process_image_ex(const int pid, pp_list VMAs, const char* dump_
 
     struct VirtualMemoryArea* vma = NULL;
     int vma_count;
-    int i;
     unsigned char* buffer = NULL;
     FILE* dump_file = NULL;
     int to_wsz;
     int wsz;
+    int i;
 
     vma_count = pp_list_size(VMAs);
     if (vma_count <= 0) {
@@ -191,7 +189,7 @@ static bool dump_process_image_ex(const int pid, pp_list VMAs, const char* dump_
     IFERRGOTO(result, done);
 
     to_wsz = (int)(vma->end_address - vma->start_address);
-    buffer = dump_process_memory_by_size(pid, vma->start_address, to_wsz);
+    buffer = dump_process_memory(pid, vma->start_address, to_wsz);
     NULLERRGOTO(buffer, result, done);
 
     wsz = fwrite(buffer, 1, to_wsz, dump_file);
@@ -230,7 +228,7 @@ bool dump_process_image(const int pid, const char* dump_path)
     char image_path[PATH_MAX] = "";
     struct VirtualMemoryArea* VMAs = NULL;
     int vma_count = 0;
-    unsigned long long image_inode = 0;
+    unsigned long long img_inode = 0;
     struct elf_process* elf_proc = NULL;
     pp_list image_VMAs = NULL;
     bool found = false;
@@ -242,8 +240,8 @@ bool dump_process_image(const int pid, const char* dump_path)
     result = read_imagepath(pid, image_path, sizeof(image_path));
     IFERRGOTO(result, done);
 
-    found = search_inode_by_imagepath(VMAs, vma_count, image_path, &image_inode);
-    if (found == false || image_inode == UNKNOWN_INODE) {
+    found = search_inode_by_imagepath(VMAs, vma_count, image_path, &img_inode);
+    if (found == false || img_inode == UNKNOWN_INODE) {
         fprintf(stderr, "Cannot find process image area\n");
         SETERRGOTO(result, done);
     }
@@ -251,7 +249,7 @@ bool dump_process_image(const int pid, const char* dump_path)
     image_VMAs = pp_list_create();
     NULLERRGOTO(image_VMAs, result, done);
 
-    result = select_vma_by_inode(image_inode, VMAs, vma_count, image_VMAs);
+    result = select_vma_by_inode(img_inode, VMAs, vma_count, image_VMAs);
     IFERRGOTO(result, done);
 
     elf_proc = create_elf_data(pid, VMAs, vma_count);
