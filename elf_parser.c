@@ -3,28 +3,54 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "procfs_parser_api.h"
 #include "pp_internal.h"
 #include "elf_parser.h"
 
-struct elf_process* create_elf_data(int pid, struct VirtualMemoryArea* VMAs, int vma_count)
+struct elf_process
+{
+    int pid;
+
+    struct VirtualMemoryArea* VMAs;
+    unsigned char** vma_buffers;
+    int vma_count;
+
+    bool is_elf32;
+    Elf64_Ehdr* hdr;
+    Elf64_Phdr* phdr;
+};
+
+elf_process_t create_elf_data(int pid, pp_list_t VMAs)
 {
     bool result = true;
 
     struct elf_process* process = NULL;
+    int vma_count;
     int i;
 
     process = calloc(1, sizeof(struct elf_process));
     NULLERRGOTO(process, result, done);
 
+    vma_count = pp_list_size(VMAs);
+
     process->pid = pid;
-    process->VMAs = VMAs;
     process->vma_count = vma_count;
 
-    process->vma_buffers = calloc(vma_count, sizeof(unsigned char*));
+    process->VMAs = malloc(vma_count * sizeof(struct VirtualMemoryArea*));
+    NULLERRGOTO(process->VMAs, result, done);
+
+    process->vma_buffers = calloc(vma_count, sizeof(unsigned char**));
     NULLERRGOTO(process->vma_buffers, result, done);
 
-    for (i = 0; i < 5; i++) {
-        process->vma_buffers[i] = dump_process_memory_by_address(pid, VMAs[i].start_address, VMAs[i].end_address);
+    for (i = 0; i < vma_count; i++) {
+        struct VirtualMemoryArea* vma = NULL;
+
+        result = pp_list_get(VMAs, i, (void**)&vma);
+        IFERRGOTO(result, done);
+
+        process->VMAs[i] = *vma;
+
+        process->vma_buffers[i] = dump_process_memory_by_address(pid, vma->start_address, vma->end_address);
         NULLERRGOTO(process->vma_buffers[i], result, done);
     }
 
@@ -38,8 +64,10 @@ done:
     return process;
 }
 
-void destroy_elf_data(struct elf_process* process)
+void destroy_elf_data(elf_process_t e_process)
 {
+    struct elf_process* process = (struct elf_process*)e_process;
+
     if (process == NULL) {
         return;
     }
@@ -52,9 +80,12 @@ void destroy_elf_data(struct elf_process* process)
         free(process->phdr);
     }
 
+    if (process->VMAs) {
+        free(process->VMAs);
+    }
+
     if (process->vma_buffers) {
         int i;
-
         for (i = 0; i < process->vma_count; i++) {
             if (process->vma_buffers[i]) {
                 free(process->vma_buffers[i]);
@@ -67,10 +98,11 @@ void destroy_elf_data(struct elf_process* process)
     free(process);
 }
 
-bool parse_elf_header(struct elf_process* process)
+bool parse_elf_header(elf_process_t e_process)
 {
     bool result = true;
 
+    struct elf_process* process = (struct elf_process*)e_process;
     unsigned char* elf_buffer = NULL;
     Elf64_Ehdr* hdr64 = NULL;
 
@@ -115,10 +147,11 @@ done:
 }
 
 
-bool parse_elf_program_header(struct elf_process* process)
+bool parse_elf_program_header(elf_process_t e_process)
 {
     bool result = false;
 
+    struct elf_process* process = (struct elf_process*)e_process;
     Elf64_Phdr* phdr64 = NULL;
     unsigned char* cursor = NULL;
     int ph_relative_offset;
@@ -128,7 +161,7 @@ bool parse_elf_program_header(struct elf_process* process)
     if (process->hdr == NULL) {
         result = parse_elf_header(process);
         IFERRGOTO(result, done);
-        if(result == false) {
+        if (result == false) {
             return false;
         }
     }
@@ -147,7 +180,7 @@ bool parse_elf_program_header(struct elf_process* process)
     ph_relative_offset = process->hdr->e_phoff - process->VMAs[ph_idx].file_offset;
     cursor = process->vma_buffers[ph_idx] + ph_relative_offset;
 
-    if(process->is_elf32) {
+    if (process->is_elf32) {
         Elf32_Phdr* phdr32 = (Elf32_Phdr*)cursor;
 
         for (i = 0; i < process->vma_count; i++) {
@@ -160,7 +193,8 @@ bool parse_elf_program_header(struct elf_process* process)
             phdr64[i].p_memsz  = phdr32[i].p_memsz;
             phdr64[i].p_align  = phdr32[i].p_align;
         }
-    } else {
+    }
+    else {
         memcpy(phdr64, cursor, sizeof(Elf64_Phdr) * process->hdr->e_phnum);
     }
 

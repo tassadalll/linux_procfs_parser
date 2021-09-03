@@ -19,7 +19,7 @@ int read_process_memory_by_address(const int pid, unsigned long long start_addre
 unsigned char* dump_process_memory(const int pid, unsigned long long start_address, int size);
 unsigned char* dump_process_memory_by_address(const int pid, unsigned long long start_address, unsigned long long end_address);
 
-bool dump_process_image(const int pid, const char* dump_path);
+bool dump_process_image(const int pid, unsigned char** image, int* img_size);
 bool dump_process_stack(const int pid, unsigned char** stack, int* stack_size);
 
 /* Virtual Memory Area permissions */

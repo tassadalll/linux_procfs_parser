@@ -2,31 +2,22 @@
 #define __ELF_PARSER__
 
 #include <stdbool.h>
-
 #include <elf.h>
-#include <sys/types.h>
 
-#include "procfs_parser_api.h"
+#include "pp_list.h"
 
-struct elf_process
-{
-    int pid;
+typedef void* elf_process_t;
 
-    struct VirtualMemoryArea* VMAs;
-    unsigned char** vma_buffers;
-    int vma_count;
+elf_process_t create_elf_data(int pid, pp_list_t VMAs);
 
-    bool is_elf32;
-    Elf64_Ehdr* hdr;
-    Elf64_Phdr* phdr;
-};
+void destroy_elf_data(elf_process_t e_process);
 
-struct elf_process* create_elf_data(int pid, struct VirtualMemoryArea* VMAs, int vma_count);
+bool parse_elf_header(elf_process_t e_process);
 
-void destroy_elf_data(struct elf_process* e_proc);
+bool parse_elf_program_header(elf_process_t e_process);
 
-bool parse_elf_header(struct elf_process* e_proc);
+Elf64_Ehdr* get_elf_header(elf_process_t e_process);
 
-bool parse_elf_program_header(struct elf_process* e_proc);
+Elf64_Phdr* get_elf_program_header(elf_process_t e_process);
 
 #endif

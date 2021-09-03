@@ -2,26 +2,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "list.h"
+#include "pp_list.h"
 
 struct pp_node
 {
-    struct pp_node *prev;
-    struct pp_node *next;
-    void*  data;
+    struct pp_node* prev;
+    struct pp_node* next;
+    void* data;
 };
 
 struct pp_list
 {
-    struct pp_node *head;
-    struct pp_node *tail;
+    struct pp_node* head;
+    struct pp_node* tail;
     int size;
 };
 
-static struct pp_node *create_node(void *data);
-static void destroy_node(struct pp_node *node);
+static struct pp_node* create_node(void* data);
+static void destroy_node(struct pp_node* node);
 
-struct pp_list *pp_list_create()
+pp_list_t pp_list_create()
 {
     struct pp_list* list = malloc(sizeof(struct pp_list));
     if (!list) {
@@ -32,25 +32,27 @@ struct pp_list *pp_list_create()
     return list;
 }
 
-void pp_list_destroy(struct pp_list* list)
+void pp_list_destroy(pp_list_t list_h)
 {
-    if (list) {
-        free(list);
+    if (list_h) {
+        free(list_h);
     }
 }
 
-void pp_list_destroy_with_nodes(struct pp_list *list, void (*fn_destroy)(void *data))
+void pp_list_destroy_with_nodes(pp_list_t list_h, void (*fn_destroy)(void* data))
 {
+    struct pp_list* list = (struct pp_list*)list_h;
     struct pp_node* node = NULL;
 
     node = list->head;
-    while(node) {
+    while (node) {
         struct pp_node* next = node->next;
-        
-        if(node->data) {
-            if(fn_destroy) {
+
+        if (node->data) {
+            if (fn_destroy) {
                 fn_destroy(node->data);
-            } else {
+            }
+            else {
                 free(node->data);
             }
         }
@@ -58,15 +60,15 @@ void pp_list_destroy_with_nodes(struct pp_list *list, void (*fn_destroy)(void *d
         destroy_node(node);
         node = next;
     }
-    
+
     pp_list_destroy(list);
 }
 
-static struct pp_node *create_node(void* data)
+static struct pp_node* create_node(void* data)
 {
     struct pp_node* node = NULL;
     node = malloc(sizeof(struct pp_node));
-    if(node == NULL) {
+    if (node == NULL) {
         return NULL;
     }
 
@@ -77,38 +79,40 @@ static struct pp_node *create_node(void* data)
     return node;
 }
 
-static void destroy_node(struct pp_node *node)
+static void destroy_node(struct pp_node* node)
 {
     free(node);
 }
 
-inline int pp_list_size(struct pp_list *list)
+inline int pp_list_size(pp_list_t list_h)
 {
-    return list->size;
+    return ((struct pp_list*)list_h)->size;
 }
 
-bool pp_list_get(struct pp_list *list, int index, void **data)
+bool pp_list_get(pp_list_t list_h, int index, void** data)
 {
-    struct pp_node *node = NULL;
+    struct pp_list* list = (struct pp_list*)list_h;
+    struct pp_node* node = NULL;
     int idx = 0;
 
-    if((unsigned int)index >= list->size) {
+    if ((unsigned int)index >= list->size) {
         return false;
     }
-    
+
     node = list->head;
     while (idx++ < index) {
         node = node->next;
     }
 
     *data = node->data;
-    
+
     return true;
 }
 
-bool pp_list_pop(struct pp_list *list, int index, void **data)
+bool pp_list_pop(pp_list_t list_h, int index, void** data)
 {
-    struct pp_node *node = NULL;
+    struct pp_list* list = (struct pp_list*)list_h;
+    struct pp_node* node = NULL;
     int idx = 0;
 
     if ((unsigned int)index >= list->size) {
@@ -139,8 +143,9 @@ bool pp_list_pop(struct pp_list *list, int index, void **data)
     return true;
 }
 
-bool pp_list_lpush(struct pp_list *list, void *data)
+bool pp_list_lpush(pp_list_t list_h, void* data)
 {
+    struct pp_list* list = (struct pp_list*)list_h;
     struct pp_node* node = NULL;
 
     node = create_node(data);
@@ -152,7 +157,8 @@ bool pp_list_lpush(struct pp_list *list, void *data)
         node->next = list->head;
         list->head->prev = node;
         list->head = node;
-    } else {
+    }
+    else {
         list->head = node;
         list->tail = node;
     }
@@ -162,9 +168,10 @@ bool pp_list_lpush(struct pp_list *list, void *data)
     return true;
 }
 
-bool pp_list_lpop(struct pp_list *list, void **data)
+bool pp_list_lpop(pp_list_t list_h, void** data)
 {
-    struct pp_node *node = NULL;
+    struct pp_list* list = (struct pp_list*)list_h;
+    struct pp_node* node = NULL;
 
     if (list->size <= 0) {
         return false;
@@ -174,7 +181,8 @@ bool pp_list_lpop(struct pp_list *list, void **data)
     if (node->next) {
         list->head = node->next;
         list->head->prev = NULL;
-    } else {
+    }
+    else {
         list->head = NULL;
         list->tail = NULL;
     }
@@ -186,8 +194,9 @@ bool pp_list_lpop(struct pp_list *list, void **data)
     return true;
 }
 
-bool pp_list_rpush(struct pp_list *list, void *data)
+bool pp_list_rpush(pp_list_t list_h, void* data)
 {
+    struct pp_list* list = (struct pp_list*)list_h;
     struct pp_node* node = NULL;
 
     node = create_node(data);
@@ -199,7 +208,8 @@ bool pp_list_rpush(struct pp_list *list, void *data)
         node->prev = list->tail;
         list->tail->next = node;
         list->tail = node;
-    } else {
+    }
+    else {
         list->head = node;
         list->tail = node;
     }
@@ -209,8 +219,9 @@ bool pp_list_rpush(struct pp_list *list, void *data)
     return true;
 }
 
-bool pp_list_rpop(struct pp_list *list, void **data)
+bool pp_list_rpop(pp_list_t list_h, void** data)
 {
+    struct pp_list* list = (struct pp_list*)list_h;
     struct pp_node* node = NULL;
 
     if (list->size <= 0) {
@@ -225,7 +236,8 @@ bool pp_list_rpop(struct pp_list *list, void **data)
     if (node->prev) {
         list->tail = node->prev;
         list->tail->next = NULL;
-    } else {
+    }
+    else {
         list->head = NULL;
         list->tail = NULL;
     }

@@ -7,7 +7,7 @@
 #include "procfs_parser_api.h"
 #include "pp_internal.h"
 #include "elf_parser.h"
-#include "list.h"
+#include "pp_list.h"
 
 static int read_memory(const int pid, FILE* memory_file, unsigned char* buffer, int size)
 {
@@ -146,7 +146,7 @@ done:
     return result;
 }
 
-static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea* VMAs, int vma_count, pp_list selected_VMAs)
+static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryArea* VMAs, int vma_count, pp_list_t selected_VMAs)
 {
     bool result = true;
     int i;
@@ -165,72 +165,39 @@ static bool select_vma_by_inode(unsigned long long inode, struct VirtualMemoryAr
     return result;
 }
 
-static bool dump_process_image_ex(const int pid, pp_list VMAs, const char* dump_path)
+static bool restore_VMA_file_offset(const int pid, pp_list_t image_VMAs)
 {
-    bool result = false;
+    bool result = true;
 
-    struct VirtualMemoryArea* vma = NULL;
-    int vma_count;
-    unsigned char* buffer = NULL;
-    FILE* dump_file = NULL;
-    int to_wsz;
-    int wsz;
-    int i;
+    elf_process_t process = NULL;
+    
+    process = create_elf_data(pid, image_VMAs);
+    NULLERRGOTO(process, result, done);
 
-    vma_count = pp_list_size(VMAs);
-    if (vma_count <= 0) {
-        SETERRGOTO(result, done);
-    }
-
-    dump_file = fopen(dump_path, "wb");
-    NULLERRGOTO(dump_file, result, done);
-
-    result = pp_list_get(VMAs, 0, (void**)&vma);
+    result = parse_elf_header(process);
     IFERRGOTO(result, done);
 
-    to_wsz = (int)(vma->end_address - vma->start_address);
-    buffer = dump_process_memory(pid, vma->start_address, to_wsz);
-    NULLERRGOTO(buffer, result, done);
-
-    wsz = fwrite(buffer, 1, to_wsz, dump_file);
-    if (wsz < to_wsz) {
-        SETERRGOTO(result, done);
-    }
-
-    free(buffer);
-    buffer = NULL;
-
-    for (i = 1; i < vma_count; i++) {
-        result = pp_list_get(VMAs, i, (void**)&vma);
-        IFERRGOTO(result, done);
-
-        buffer = dump_process_memory_by_address(pid, vma->start_address, vma->end_address);
-        NULLERRGOTO(buffer, result, done);
-    }
+    result = parse_elf_program_header(process);
+    IFERRGOTO(result, done);
 
 done:
 
-    if (buffer) {
-        free(buffer);
-    }
-
-    if (dump_file) {
-        fclose(dump_file);
+    if (process) {
+        destroy_elf_data(process);
     }
 
     return result;
 }
 
-bool dump_process_image(const int pid, const char* dump_path)
+bool dump_process_image(const int pid, unsigned char** image, int* img_size)
 {
     bool result = false;
 
     char image_path[PATH_MAX] = "";
     struct VirtualMemoryArea* VMAs = NULL;
     int vma_count = 0;
-    unsigned long long img_inode = 0;
-    struct elf_process* elf_proc = NULL;
-    pp_list image_VMAs = NULL;
+    unsigned long long inode = 0;
+    pp_list_t image_VMAs = NULL;
     bool found = false;
     int i;
 
@@ -240,8 +207,8 @@ bool dump_process_image(const int pid, const char* dump_path)
     result = read_imagepath(pid, image_path, sizeof(image_path));
     IFERRGOTO(result, done);
 
-    found = search_inode_by_imagepath(VMAs, vma_count, image_path, &img_inode);
-    if (found == false || img_inode == UNKNOWN_INODE) {
+    found = search_inode_by_imagepath(VMAs, vma_count, image_path, &inode);
+    if (found == false || inode == UNKNOWN_INODE) {
         fprintf(stderr, "Cannot find process image area\n");
         SETERRGOTO(result, done);
     }
@@ -249,20 +216,11 @@ bool dump_process_image(const int pid, const char* dump_path)
     image_VMAs = pp_list_create();
     NULLERRGOTO(image_VMAs, result, done);
 
-    result = select_vma_by_inode(img_inode, VMAs, vma_count, image_VMAs);
+    result = select_vma_by_inode(inode, VMAs, vma_count, image_VMAs);
     IFERRGOTO(result, done);
-
-    elf_proc = create_elf_data(pid, VMAs, vma_count);
-    NULLERRGOTO(elf_proc, result, done);
-
-    parse_elf_header(elf_proc);
-    parse_elf_program_header(elf_proc);
+    
 
 done:
-
-    if (elf_proc) {
-        destroy_elf_data(elf_proc);
-    }
 
     if (VMAs) {
         free(VMAs);
@@ -274,7 +232,6 @@ done:
 
     return result;
 }
-
 
 #define MAPS_LINE_CHK(ptr, expected_ch, label) \
     if (errno != 0 || *ptr != expected_ch) {   \
@@ -369,7 +326,7 @@ bool parse_maps_file(const int pid, struct VirtualMemoryArea** parsed_VMAs, int*
     struct VirtualMemoryArea* VMAs = NULL;
     struct VirtualMemoryArea* vma = NULL;
     FILE* file = NULL;
-    pp_list list = NULL;
+    pp_list_t list = NULL;
     char path[32];
     char buffer[512];
     int count;
