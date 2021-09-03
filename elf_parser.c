@@ -209,3 +209,13 @@ done:
 
     return result;
 }
+
+Elf64_Ehdr* get_elf_header(elf_process_t e_process)
+{
+    return ((struct elf_process*)e_process)->hdr;
+}
+
+Elf64_Phdr* get_elf_program_header(elf_process_t e_process)
+{
+    return ((struct elf_process*)e_process)->phdr;
+}
