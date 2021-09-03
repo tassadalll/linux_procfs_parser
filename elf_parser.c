@@ -28,7 +28,7 @@ elf_process_t create_elf_data(int pid, pp_list_t VMAs)
     int vma_count;
     int i;
 
-    process = calloc(1, sizeof(struct elf_process));
+    process = malloc(sizeof(struct elf_process));
     NULLERRGOTO(process, result, done);
 
     vma_count = pp_list_size(VMAs);
@@ -36,10 +36,10 @@ elf_process_t create_elf_data(int pid, pp_list_t VMAs)
     process->pid = pid;
     process->vma_count = vma_count;
 
-    process->VMAs = malloc(vma_count * sizeof(struct VirtualMemoryArea*));
+    process->VMAs = malloc(vma_count * sizeof(struct VirtualMemoryArea));
     NULLERRGOTO(process->VMAs, result, done);
 
-    process->vma_buffers = calloc(vma_count, sizeof(unsigned char**));
+    process->vma_buffers = malloc(vma_count * sizeof(unsigned char*));
     NULLERRGOTO(process->vma_buffers, result, done);
 
     for (i = 0; i < vma_count; i++) {

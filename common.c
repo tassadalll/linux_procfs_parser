@@ -146,7 +146,7 @@ bool read_command_line(const int pid, char* cmdline, unsigned int bsz)
         return false;
     }
 
-    buff = (char*)malloc(bsz);
+    buff = malloc(bsz);
     if (buff == NULL) {
         SETERRGOTO(result, done);
     }
