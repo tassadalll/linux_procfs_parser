@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <linux/limits.h>
+#include <sys/types.h>
 
 bool is_process_alive(const int pid, bool* is_alive);
 bool is_kernel_process(const int pid, bool* is_kp);
@@ -39,6 +40,68 @@ struct VirtualMemoryArea
     unsigned long long  inode;
     char                pathname[PATH_MAX];
 };
+
+/* parse "/proc/[pid]/maps" */
 bool parse_maps_file(const int pid, struct VirtualMemoryArea** VMAs, int* vma_count);
+
+struct ProcessStat
+{
+    pid_t pid;
+    char comm[NAME_MAX];
+    char state;
+    pid_t ppid;
+    gid_t pgrp;
+    int session;
+    int tty_nr;
+    gid_t tpgid;
+    unsigned int flags;
+    unsigned long long minflt;
+    unsigned long long cminflt;
+    unsigned long long majflt;
+    unsigned long long cmajflt;
+    unsigned long long utime;
+    unsigned long long stime;
+    unsigned long long cutime;
+    unsigned long long cstime;
+    long long priority;
+    long long nice;
+    long long num_threads;
+    long long itrealvalue;
+    unsigned long long starttime;
+    unsigned long long vsize;
+    long long rss;
+    unsigned long long rsslim;
+    unsigned long long startcode;
+    unsigned long long endcode;
+    unsigned long long startstack;
+    unsigned long long kstkesp;
+    unsigned long long kstkeip;
+    unsigned long long signal;
+    unsigned long long blocked;
+    unsigned long long sigignore;
+    unsigned long long sigcatch;
+    unsigned long long wchan;
+    unsigned long long nswap;
+    unsigned long long cnswap;
+    int exit_signal;
+    int processor;
+    unsigned int rt_priority;
+    unsigned int policy;
+    unsigned long long delayacct_blkio_ticks;
+    unsigned long long guest_time;
+    unsigned long long cguest_time;
+    unsigned long long start_data;
+    unsigned long long end_data;
+    unsigned long long start_brk;
+    unsigned long long arg_start;
+    unsigned long long arg_end;
+    unsigned long long env_start;
+    unsigned long long env_end;
+    int exit_code;
+};
+
+/* parse "/proc/[pid]/stat" */
+bool parse_process_stat(const int pid, struct ProcessStat* process_stat);
+
 
 #endif // __PROCFS_PARSER_API__
