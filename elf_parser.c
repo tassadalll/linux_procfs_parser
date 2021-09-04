@@ -149,7 +149,7 @@ done:
 
 bool parse_elf_program_header(elf_process_t e_process)
 {
-    bool result = false;
+    bool result = true;
 
     struct elf_process* process = (struct elf_process*)e_process;
     Elf64_Phdr* phdr64 = NULL;
