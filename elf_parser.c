@@ -15,6 +15,8 @@ struct elf_process
     unsigned char** vma_buffers;
     int vma_count;
 
+    unsigned long long imagebase;
+
     bool is_elf32;
     Elf64_Ehdr* hdr;
     Elf64_Phdr* phdr;
@@ -32,6 +34,9 @@ elf_process_t create_elf_data(int pid, pp_list_t VMAs)
     NULLERRGOTO(process, result, done);
 
     vma_count = pp_list_size(VMAs);
+    if (vma_count < 0) {
+        SETERRGOTO(result, done);
+    }
 
     process->pid = pid;
     process->vma_count = vma_count;
@@ -53,6 +58,8 @@ elf_process_t create_elf_data(int pid, pp_list_t VMAs)
         process->vma_buffers[i] = dump_process_memory_by_address(pid, vma->start_address, vma->end_address);
         NULLERRGOTO(process->vma_buffers[i], result, done);
     }
+
+    process->imagebase = process->VMAs[0].start_address;
 
 done:
 

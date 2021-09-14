@@ -18,4 +18,6 @@
 
 #define UNKNOWN_INODE 0
 
+long long get_file_size(FILE* file);
+
 #endif

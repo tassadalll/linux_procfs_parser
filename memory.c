@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <malloc.h>
 #include <errno.h>
 
 #include "procfs_parser_api.h"
@@ -170,7 +170,10 @@ static bool restore_VMA_file_offset(const int pid, pp_list_t image_VMAs)
     bool result = true;
 
     elf_process_t process = NULL;
-    
+    Elf64_Ehdr* hdr = NULL;
+    Elf64_Phdr* phdr = NULL;
+    int i;
+
     process = create_elf_data(pid, image_VMAs);
     NULLERRGOTO(process, result, done);
 
@@ -180,6 +183,18 @@ static bool restore_VMA_file_offset(const int pid, pp_list_t image_VMAs)
     result = parse_elf_program_header(process);
     IFERRGOTO(result, done);
 
+    hdr = get_elf_header(process);
+    phdr = get_elf_program_header(process);
+
+    for (i = 0; i < hdr->e_phnum; i++) {
+        if (phdr[i].p_type == PT_LOAD) {
+            printf("0x%08x\n", phdr[i].p_type);
+            printf("0x%016lx\n", phdr[i].p_offset);
+            printf("0x%016lx\n", phdr[i].p_vaddr);
+            printf("0x%016lx\n", phdr[i].p_paddr);
+        }
+    }
+
 done:
 
     if (process) {
@@ -188,6 +203,82 @@ done:
 
     return result;
 }
+
+
+static bool dump_image(const int pid, pp_list_t image_VMAs, unsigned char** dumped_image, int* img_size)
+{
+    bool result = false;
+
+    FILE* tmp_file = NULL;
+    __off_t filesize;
+    unsigned char* buffer = NULL;
+    unsigned char* image = NULL;
+    int size;
+
+    size = pp_list_size(image_VMAs);
+    if (size < 1) {
+        return false;
+    }
+
+    tmp_file = tmpfile();
+    NULLERRGOTO(tmp_file, result, done);
+
+    for (int i = 0; i < size; i++) {
+        struct VirtualMemoryArea* vma = NULL;
+        int area_size = 0;
+
+        result = pp_list_get(image_VMAs, i, (void**)&vma);
+        IFERRGOTO(result, done);
+
+        area_size = (int)(vma->end_address - vma->start_address);
+
+        buffer = dump_process_memory(pid, vma->start_address, area_size);
+        NULLERRGOTO(buffer, result, done);
+
+        if (fseeko(tmp_file, (off_t)vma->file_offset, SEEK_SET) == -1) {
+            SETERRGOTO(result, done);
+        }
+
+        if (fwrite(buffer, 1, area_size, tmp_file) < area_size) {
+            SETERRGOTO(result, done);
+        }
+
+        free(buffer);
+        buffer = NULL;
+    }
+
+    filesize = ftell(tmp_file);
+    rewind(tmp_file);
+
+    image = malloc(filesize);
+    NULLERRGOTO(image, result, done);
+
+    if (fread(image, 1, filesize, tmp_file) < filesize) {
+        SETERRGOTO(result, done);
+    }
+
+    *img_size = filesize;
+    *dumped_image = image;
+    image = NULL;
+
+done:
+
+    if (result == false && image != NULL) {
+        free(image);
+        image = NULL;
+    }
+
+    if (buffer) {
+        free(buffer);
+    }
+
+    if (tmp_file) {
+        fclose(tmp_file);
+    }
+
+    return result;
+}
+
 
 bool dump_process_image(const int pid, unsigned char** image, int* img_size)
 {
@@ -218,7 +309,9 @@ bool dump_process_image(const int pid, unsigned char** image, int* img_size)
 
     result = select_vma_by_inode(inode, VMAs, vma_count, image_VMAs);
     IFERRGOTO(result, done);
-    
+
+    result = dump_image(pid, image_VMAs, image, img_size);
+    IFERRGOTO(result, done);
 
 done:
 
